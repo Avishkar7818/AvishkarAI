@@ -1,0 +1,1117 @@
+Transformation Coding: Simple Objectives for Equivariant Representations
+Mehran Shakerinava * 1 2 Arnab Kumar Mondal * 1 2 Siamak Ravanbakhsh 1 2
+Abstract
+We present a simple non-generative approach to
+deep representation learning that seeks equivari-
+ant deep embedding through simple objectives.
+In contrast to existing equivariant networks, our
+transformation coding approach does not con-
+strain the choice of the feed-forward layer or the
+architecture and allows for an unknown group ac-
+tion on the input space. We introduce several such
+transformation coding objectives for different Lie
+groups such as the Euclidean, Orthogonal and the
+Unitary groups. When using product groups, the
+representation is decomposed and disentangled.
+We show that the presence of additional informa-
+tion on different transformations improves disen-
+tanglement in transformation coding. We evaluate
+the representations learnt by transformation cod-
+ing both qualitatively and quantitatively on down-
+stream tasks, including reinforcement learning.
+1. Introduction
+Sample efﬁcient representation learning is a key open chal-
+lenge in deep learning for AI. Despite their success in many
+settings, generative representations are generally deemed
+sample inefﬁcient. Therefore interest in self-supervision and
+contrastive learning techniques has signiﬁcantly increased
+over the past few years. While contrastive learning objec-
+tives often create invariance to certain (symmetry) trans-
+formations, in this paper, we pursue alternative objectives
+toward equivariant representations.
+In contrast to previous equivariant networks, our approach,
+called transformation coding, does not require any special-
+ized architecture, and it can accommodate any non-linear
+transformation of the input. More importantly, one does not
+even need to know the correspondence between the trans-
+formations of the data and the underlying abstract group.
+For example, if our data consists of images before and after
+*Equal contribution
+1School of Computer Science, McGill
+University, Montr´eal, Canada 2Mila- Quebec Artiﬁcial Intelligence
+Institute, Montr´eal, Canada. Correspondence to: Arnab Kumar
+Mondal <arnab.mondal@mila.quebec>.
+Preprint. Copyright 2022 by the authors.
+Figure 1. The E(3)-equivariant embedding for the pendulum. The
+input x consists of a pair of images that together identify both the
+location and the velocity of a pendulum. The learned equivariant
+embedding encodes both the location (change of color) and veloc-
+ity (change of brightness). The two circular ends (black and white)
+correspond to states of maximum velocity in opposite directions.
+The transformation coding objective for the Euclidean group learns
+this embedding by preserving the pairwise distance between the
+codes before (f(x), f(x′)) and after (f(tX(g, x)), f(tX(g, x)))
+transformations of the input by tX. For the pendulum, the trans-
+formations are in the form of positive or negative torque in some
+range. For yellow and green blobs on the manifold, the torque is
+applied clockwise.
+changing the camera angle, we do not need to know the
+actual angle. However, for example, we may need pairs
+of images in which the camera angle changes by the same
+amount.
+In the following, ﬁrst, we observe that equivariance, in gen-
+eral, is a very weak inductive bias. In particular, we show
+that an injective code is equivariant to “any” transformation
+group. However, in this manifestation of equivariance, the
+group action on the code can be highly non-linear. Since
+the simplicity of the action on the latent space seems essen-
+tial for equivariance to become a useful learning bias, we
+regularize the group action on the code to make it “simple”.
+This symmetry regularization objective is group-dependent
+and the essence of our approach to transformation-based
+coding.
+Our symmetry objectives rely on the idea that the transfor-
+arXiv:2202.10930v1  [cs.LG]  19 Feb 2022
+Transformation Coding: Simple Objectives for Equivariant Representations
+mation groups preserve speciﬁc quantities. For example,
+the deﬁning action of the Euclidean group preserves the
+Euclidean distance, and all Euclidean distance preserving
+transformations are of this form. Therefore, to enforce
+equivariance to the Euclidean group, it is sufﬁcient to en-
+sure that the embedding of any two data points has the same
+distance before and after the same transformation of the in-
+puts; see Figure 1. We present similar objectives for several
+other groups. Transformation coding combines this simple
+recipe with an injectivity constraint to produce equivariant
+representations without the need for a reconstruction loss or
+a hard constraint on the deep architecture.
+2. Related Works
+Finding effective priors and objectives for deep represen-
+tation learning is an integral part of the quest for AI (Ben-
+gio et al., 2013). Recent years have witnessed a growing
+interest in self-supervision and, in particular, contrastive ob-
+jectives (Hadsell et al., 2006; Oord et al., 2018; Chen et al.,
+2020; Tian et al., 2019; He et al., 2020; Zbontar et al., 2021;
+Ermolov et al., 2021). While the use of transformations is
+prominent in these works, in many settings the objective
+encourages invariance to certain transformations, making
+such models useful for invariant downstream tasks such as
+classiﬁcation. Similar to many of these methods, we also
+use transformed pairs to learn a representation, with the
+distinction of learning an equivariant representation.
+Learning both invariant and equivariant deep representations
+has been the subject of many works over the past decade.
+Many recent efforts in this direction have focused on the
+design of equivariant maps (Wood & Shawe-Taylor, 1996;
+Cohen & Welling, 2016; Ravanbakhsh et al., 2017; Kondor
+& Trivedi, 2018; Cohen et al., 2019; Finzi et al., 2021; Villar
+et al., 2021) where the “linear” action of the group on the
+data is known. Due to this constraint, the application of
+these models has been focused on ﬁxed geometric data such
+as images, sets, graphs, and spherical data, or physically
+motivated Poincare group, among others.
+In the present work, the group action is unknown and possi-
+bly non-linear. Therefore, in contrast to many prior work,
+linear representation theory plays no signiﬁcant role. Our
+setup is closer to the body of work on generative representa-
+tion learning (Burgess et al., 2018; Chen et al., 2016; Mita
+et al., 2021), in which the (linear) transformation is applied
+to the latent space (Quessard et al., 2020; Worrall et al.,
+2017; Kulkarni et al., 2015; Lenc & Vedaldi, 2016; Cohen &
+Welling, 2014; Falorsi et al., 2018). Among these generative
+coding methods, transforming autoencoder (Hinton et al.,
+2011) is a closely related early work that, in addition to
+equivariance, seeks to represent the part-whole hierarchy
+in the data. What additionally contrasts our work with the
+follow-up works on capsule networks (Sabour et al., 2017;
+Lenssen et al., 2018) is that our transformation coding is
+agnostic to the choice of architecture and training. We only
+rely on our objective function to enforce equivariance.
+When considering the Euclidean group, our equivariant code
+produces a manifold that preserves distances in the embed-
+ding space under non-linear transformations of the input.
+This embedding should not be confused with isometric em-
+bedding (Tenenbaum et al., 2000), where the objective is to
+maintain the pairwise distances between points in the input
+and the embedding space.
+3. Background on Symmetry Transformations
+We can think of transformations as a set of bijective maps on
+a domain X, and since these maps are composable, we can
+identify their compositional structure using a group G. For
+this reason, such transformations are called group actions.
+To formally deﬁne transformation groups, we ﬁrst deﬁne an
+abstract group. A group G is a set equipped with a binary
+operation, such that the set is closed under the operation
+gg′ ∈G ∀g,g′ ∈G, every g ∈G has a unique inverse such
+that gg−1 = e, where e is the identity element of the group,
+and the group operations are associative (gg′)g′′ = g(g′g′′).
+A G-action on a set X is deﬁned by a function t ∶G × X →
+X, which can be thought of as a bijective transforma-
+tion parameterized by g ∈G. In order to maintain the
+group structure, the action should satisfy the following
+two properties: (1) action of the identity is the identity
+transformation t(e,x) = x; (2) composition of two ac-
+tions is equal to the action of the composition of group
+elements t(g,t(g′x)) = t(gg′,x). The action t is faithful
+to G if transformations of X using each g ∈G are unique
+– i.e., ∀g,g′ ∃x ∈X s.t. t(g,x) ≠t(g′,x). If a G-action is
+deﬁned on a set X, we call X a G-set.
+4. Equivariance is Cheap, Actions Matter
+A symmetry-based representation or embedding is a func-
+tion f ∶X →Z such that both X and Z are G-sets, and
+furthermore f “knows about” G-actions, in the sense that
+transformations of the input using tX have the same effect
+as transformations of the output using some action tZ:
+f(tX(g,x)) = tZ(f(x),g)
+∀g,x ∈G × X
+(1)
+The following claim shows that despite many efforts in
+designing equivariant networks, simply asking for the rep-
+resentation to be equivariant is not a strong inductive bias,
+and we argue that the action matters.
+Proposition 4.1. Given a transformation group tX ∶G ×
+X →X, the function f ∶X →Z is an equivariant represen-
+tation if ∀g ∈G,x,x′ ∈X
+f(x) = f(x′) ⇔f(tX(g,x)) = f(tX(g,x′)).
+(2)
+2
+Transformation Coding: Simple Objectives for Equivariant Representations
+That is, two embeddings are identical iff they are identical
+for all transformations.
+The proof is in the appendix. The condition above is satisﬁed
+by all injective functions, indicating that many functions are
+equivariant to any group.
+Corollary 4.2. Any injective function f ∶X →Z is equiv-
+ariant to any transformation group tX ∶G × X →X, if we
+deﬁne G action on the embedding space as
+tZ(g,z) ≐f(tX(g,f −1(z)))
+∀g,z ∈G × Z
+(3)
+The ramiﬁcation of the results above in what follows is two-
+fold:
+1. While injectivity ensures equivariance, the group ac-
+tion on the embedding as shown in Equation (3) can be-
+come highly non-linear. Intuitively, this action recovers
+x = f −1(z), applies the group action x′ = tX(x) in the in-
+put domains and maps back to the embedding space f(x′) to
+ensure equivariance. In the following, we push tZ towards
+a simple linear G-action through optimization of f. This
+objective can be interpreted as a symmetry regularization or
+a symmetry prior.
+2. Although Theorem 4.2 uses injectivity of f for the entire
+X, we only need this for the data manifold. In practice, one
+could enforce injectivity on the training dataset D using loss
+functions deﬁned on the training data, for example, using a
+hinge loss (Hadsell et al., 2006)
+Lhinge(f,D) =
+∑
+x,x′≠x∈D
+max(ϵ −∥f(x) −f(x′))∥,0)
+(4)
+or other losses (barrier functions) that monotonically de-
+crease with distance, such as
+1
+∥f(x)−f(x′)∥, or its logarithm
+−log(∥f(x) −f(x′)∥). In experiments we use the logarith-
+mic barrier function.
+5. Symmetry Regularization Objectives
+In learning equivariant representations, we often do not
+know the abstract group G and how it transforms our data,
+tX. We assume that one can pick a reasonable abstract
+group G that “contains” the real abstract group acting on the
+data – i.e., G action on the input may not be faithful. Our
+goal is to learn an f ∶X →Z that is equivariant w.r.t. the
+actions tX,tZ, where tX ∶X × G →X is unknown and tZ
+is some (simple) G-action on Z of our choosing.
+5.1. More Informed but Less Practical Setting
+In the most informed case, the dataset also contains infor-
+mation about which group member g ∈G can be used to
+transform x to x′ – that is the dataset consists of triples
+(x,g,xt = tX(g,x)). By having access to this information
+Figure 2. Visualization of the latent projection for the rotating
+Chair dataset. The chair is rotated in three orthogonal axis from 0
+to 2π. The latent embedding for each pose of the chair is projected
+from 16D embedding space to a 2D space for visualization. The
+colors of the representations is mapped to the the angle of rota-
+tion of the chair. We notice that the mapping function f learnt is
+continuous with respect to the transformations of the object and
+it maps the rotations along an axis to a circular manifold. This is
+true for each orthogonal axis of rotation.
+we can regularize the embedding using the following loss
+function:
+Linformed
+G
+(f,D) =
+∑
+(x,g,xt)∈D
+ℓ(f(xt) −tZ(g,f(x)))
+(5)
+where ℓis an appropriate loss function such as the square
+loss. At its minimum, we have f(xt) = tZ(g,f(x)) or
+f(tX(g,x)) = tZ(g,f(x)), enforcing equivariance condi-
+tion of Equation (1). However, even if the optimal value is
+not reach, due to its injectivity, f is still G-equivariant, and
+the the objective above is regularizing or simplifying the G
+action on the code.
+The assumption of having access to g is often not realis-
+tic. As an example, in the Reinforcement Learning (RL)
+settings, where we have access to the action of the agent
+that can transform the state, although we have a triplet
+(x,a,xt), often a cannot be trivially mapped to a group ele-
+ment. Fortunately, using the fact that certain group actions
+are symmetries of some structures, we may still learn an
+equivariant embedding, even if we do not have the group
+information tied to the dataset. In this approach, the loss
+function and other potential sources of information in D will
+be group-speciﬁc. As we see shortly, for ﬁnite groups, we a
+symmetry regularization without any additional information
+is viable. However, for the remaining groups discussed in
+this paper, we need to be able to identify pairs of identical
+transformations – i.e., transformations that use the “same”
+3
+Transformation Coding: Simple Objectives for Equivariant Representations
+group member – although we do not need to know the actual
+group member.
+5.2. Finite Groups
+Given two instances x,x′ ∈D, we may “optimize” for the
+choice of g ∈G, such that tZ(f(x),g) ≈f(x′), chang-
+ing Equation (5) to
+LG(f,D) =
+∑
+x,x′∈D
+min
+g∈G ℓ(f(x) −tZ(g,f(x′))).
+(6)
+This approach may be suitable for ﬁnite groups, where one
+can enumerate g ∈G to perform the minimization inside the
+outer optimization. Since any ﬁnite group has a permutation
+representation, we can always deﬁne tZ to permute blocks
+of the latent representation. In this case, the loss function
+above involves a search to ﬁnd the best permutation within
+a group that matches the embeddings before and after the
+transformation.
+For some permutation groups, this search can be performed
+more efﬁciently. For example, in the case of the symmetric
+group, the loss function of Equation (6) is also sometimes
+known as earth mover’s distance (Fan et al., 2017). One
+can also use the Chamfer distance to approximate this loss
+function. In contrast to the existing permutation equivari-
+ant networks (Zaheer et al., 2017; Qi et al., 2017), here
+the permutation action on the input is not limited to the
+permutation of a known group of variables – that is, the
+representation could be equivariant to shufﬂing of a priori
+unknown entities/objects in the input.
+5.3. Euclidean Group
+The deﬁning action of the Euclidean group E(n) is the
+set of transformations that preserve the Euclidean distance
+between any two points in Rn, a.k.a. isometries. These
+transformations are compositions of translations, rotations,
+and reﬂections. Since for the real domain, all isometries
+are linear and belong to E(n), we can enforce the group
+structure on the embedding by ensuring that distances be-
+tween the embeddings before and after any transformation
+match. For this, we need the dataset D to be a set of pairs
+of pairs ((x,xt = tX(g,x)),(x′,x′
+t = tX(g,x′))), where
+x,x′ are transformed using the same unknown group mem-
+ber g. Distance-preservation loss below combined with
+injection loss are sufﬁcient to produce an E(n)-regularized
+embedding:
+LE(n)(f,D) = ∑
+((x,xt),(x′,x′
+t))∈D
+ℓ(
+distance before the
+transformation
+³¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹·¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹µ
+∥f(x) −f(x′)∥−
+distance after the
+transformation
+³¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹·¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹µ
+∥f(xt) −f(x′
+t)∥)
+(7)
+In the standard RL setup, where we have access to triplets
+Figure 3. (left) Conformal vs. (right) VAE embedding of double-
+bump world.
+(s,a,s′), we can easily form D by unrolling an episode and
+collecting two different state transitions corresponding to a
+particular action. In practice, with a ﬁnite actions, we can
+efﬁciently generate this dataset by keeping separate buffer
+for each action where we store state transitions for that
+action and sample from that buffer to train the embedding
+function f.
+5.4. Orthogonal and Unitary Groups
+The deﬁning action of the orthogonal group O(n) preserves
+the inner product between two vectors; these are exactly Eu-
+clidean isometries that ﬁx the origin. The analogous group
+in the complex domain is the unitary group, which preserves
+the complex inner product. Our symmetry-regularization
+objective penalizes the change in the inner product of two
+embeddings before and after the same transformation:
+LO(n)(f,D) =
+∑
+((x,xt),(x′,x′
+t))∈D
+ℓ(f(x)⊺f(x′) −f(xt)⊺f(x′
+t)).
+For the unitary group one additionally needs to embed to
+complex domain Z = Cn or use separate real and imaginary
+codes use the inner product of the complex domain.
+5.5. Conformal Group
+Conformal group is the group of transformations that pre-
+serve the angle. In a Euclidean embedding, these trans-
+formations include a combination of translation, rotation,
+dilation, and inversion with respect to an n −1-sphere. To
+enforce this group structure we need a triplets of inputs, be-
+fore and after a transformation ((x,xt),(x′,x′
+t),(x′′,x′′
+t )),
+so that we can calculate the angle in the embedding. Similar
+to distance-preserving loss of Equation (7), this objective en-
+forces an invariance; this time we enforce the invariance of
+the angle between the triplet, before and the transformation:
+LCO(n)(f,D) =
+∑
+((x,xt),(x′,x′
+t),(x′′,x′′
+t ))∈D
+ℓ( cos(∠f(x),f(x′),f(x′′))
+−cos(∠f(x′
+t),f(x′
+t),f(x′′
+t ))
+(8)
+4
+Transformation Coding: Simple Objectives for Equivariant Representations
+where cos(∠y,y′,y′′) = (y−y′)⊺(y′′−y′)
+∥y−y′∥∥y′′−y′∥is the cosine of the
+angle between the three embeddings.
+This objective imposes a weaker constraint on the embed-
+ding than the distance preservation of the Euclidean group
+– preserving Euclidean distance implies preserving the an-
+gle. Moreover, it has an additional beneﬁt that compared
+to LE(n) the loss cannot be minimized by simply shrinking
+the embedding, therefore in practice, the injection enforc-
+ing losses of Section 4 is no longer necessary when using
+conformal symmetry regularization.
+6. Decomposing the Representation
+Higgins et al. (2018) suggested a notion of disentangled
+representation based on decomposition of the abstract group
+into a direct product form G = G1 × ... × Gk. There are
+two approaches to learning such decomposed representation
+in transformation coding, depending on whether or not we
+can perform certain types of transformations in isolation.
+For example, an RL agent may transform its environment
+through actions like moving a single limb that can be per-
+formed in isolation. In this case, we call the decomposition
+active to contrast it with the passive case where the action
+of different subgroups is always mixed in our dataset.
+6.1. Active Decomposition
+Let G = {(g1,...,gk) ∈G1 × ... × Gk}, where
+Gi ≅{(
+i−1
+³¹¹¹¹¹¹·¹¹¹¹¹¹µ
+e,...,e,gi,e,...,e) ∈G}
+can be identiﬁed with a normal subgroup of G. In active
+decomposition, sub-groups can act in isolation and therefore
+we have k types of tuples in our dataset D1,...,Dk ⊂D.
+Each subset Di is associated with actions of a subgroup Gi
+using tX((e,...,e,gi,e...,e),⋅)), gi ∈Gi.
+In this setting, the representation f ∶X →Z = Z1 ×...×Zk
+can be thought of as k separate functions where fi ∶X →Zi
+is equivariant to Gi-action and invariant to all Gj,j ≠i
+actions. This gives the following objective
+Lactive
+G
+(f,D) =
+k
+∑
+i=1
+LGi(fi,Di)
+´¹¹¹¹¹¹¹¹¹¹¹¹¹¸¹¹¹¹¹¹¹¹¹¹¹¹¹¶
+equivariance to Gi
++Linv.
+G/Gi(fi,D/Di)
+´¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¸¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹¶
+invariance to Gj for j≠i
+(9)
+where
+Linv.
+G
+(f,D)
+enforces
+invariance
+of
+f
+to
+G-transformations
+in
+D
+–
+e.g.,
+by
+penalizing
+∥f(x) −f(tX(g,x))∥.
+In addition to isolated ac-
+tions assumed in this setting we may have mixed actions.
+Moreover, if this mixing involves a known sparse subset
+of sub-groups (e.g., a subset of joints) the loss function
+of Equation (9) can be modiﬁed accordingly.
+6.2. Passive Decomposition
+When we have no control over transformations, and we are
+simply given the data, it is still possible to use an abstract
+group that has a product form. Here again, f ∶X →Z =
+Z1×...×Zk, but the loss function is simply enforced on each
+block separately – i.e., Lpassive
+G
+(f,D) = ∑k
+i=1 LGi(fi,D),
+where LGi(fi,D) is a transformation coding objective
+from Section 5.
+7. Experiments
+We conducted many experiments to qualitatively study the
+representation learned by transformation coding, its ability
+to produce a disentangled representation, and quantitatively
+compare against simple baselines in both representation
+learning and downstream RL tasks. For details of architec-
+ture and training, see Appendix E.
+7.1. Qualitative Analysis
+Figure 5. VAE embedding
+for the pendulum example;
+compare againts Figure 1
+In this section, we visualize
+the representation learned for
+two examples from the Gym
+environment (Brockman et al.,
+2016), including the pendulum
+and the mountain car (see Ap-
+pendix B, followed by an exper-
+iment involving a rotating ob-
+ject where we know the ideal
+embedding in the form of SO(3) manifold. Finally, Fig-
+ure 3 visualizes a conformal embedding for double-bump
+world. In most cases we also visualize Variational AutoEn-
+coder (VAE) (Kingma & Welling, 2013) embeddings for
+comparison. Our objective here is to visually demonstrate
+the behavior of transformation coding and its remarkable
+ability to learn embeddings that are informed by non-linear
+transformations of the input.
+7.1.1. THE PENDULUM
+For this experiment, the input x is two consecutive frames of
+the pendulum that have been grayscaled and downsampled
+to 32×32 pixels. The action-space is a range of torques that
+can be applied on the base of the pendulum. We use the
+action to transform the data. We use the objective of Equa-
+tion (7) to learn an E(3)-equivariant representation. To
+efﬁciently estimate LE(n), we use a mini-batch that consists
+of 64 randomly sampled observations from the environment
+and their transformations via three randomly sampled ac-
+tions (4 × 64 samples in total). Once the embedding f(x)
+is produced, the pairwise distance between all 642 pairs is
+calculated, and the mini-batch loss penalizes the change in
+these distances between any pair of transformations in the
+mini-batch. Therefore, using this mini-batching procedure,
+5
+Transformation Coding: Simple Objectives for Equivariant Representations
+Figure 4. Active versus passive decomposition of the embedding for the double-bump world into E(2)×E(2)-set. In active decomposition
+(right), one of the manifolds encodes the circular translation of the triangle bump, while the second one represents the location of the
+square bump. Various colors indicate the location of the triangle. In the case of passive decomposition (left), since the decomposition is
+not guided by the transformation of individual shapes, the manifolds jointly encode the location of each bump type. The ﬁgure shows the
+embedding for two inputs before, (x, x′) in blue, and after, (xt, x′
+t) in red, the same transformation. This transformation cyclically shifts
+both the triangle and the square to the left, but the amount of translation is larger for the square. In both passive and active decomposition,
+the Euclidean distance is preserved by the transformation – the red points have the same distance with each other as the blue points on
+every manifold.
+the complexity of calculating the loss grows quadratically
+with both the number of independent samples and transfor-
+mations.
+The model on itself learns to parameterize the embedding
+using the location and the velocity of the pendulum from
+the input data; see Figure 1.1 For comparison Figure 5
+shows the embedding learned using a VAE from the same
+dataset. We perform a similar experiment in Moutain Car
+Environment and report its results in Appendix B.
+7.1.2. ROTATING CHAIR
+We consider a 3D chair from ModelNet40 (Wu et al., 2015)
+and transform it through the action of the group SO(3). The
+group action in the input space is given by 2D projection
+into a 48×48 image after 3D rotation of the chair. While the
+group of interest is SO(3), we use Euclidean regularization
+loss of Equation (7). In choosing the abstract group, we
+often only need to ensure that the group is large enough to
+contain the ground truth as a subgroup. Although this results
+in a stronger symmetry regularization on the embedding,
+a G-equivariant embedding is equivariant to any H ≤G.
+This means that, for example, an E(2) equivariant embed-
+1A natural parametrization of a slow-moving pendulum using
+location and velocity is a cylinder, where the SO(2) encodes
+the location, and R encodes the velocity. At high velocities, the
+two ends of the cylinder twist and meet, forming a Klein bottle.
+However, the learned manifold of Figure 1 is different from both;
+it has a twist in the middle. This twist turns out to be necessary for
+enforcing E(3)-equivariance. Because of the twist, the movement
+of the pendulum has the same direction around the circles on both
+sides. This is necessary for maintaining the distance of two points
+on opposite sides of the manifold after a transformation.
+ding can be useful for its ﬁnite subgroups such as dihedral
+or cyclic groups. We embed the chair in R16 using trans-
+formation coding2 and visualize the latent by rotating the
+chair along three orthogonal axes and projecting the latent
+codes into a 2D space. Figure 2 shows three circular latent
+traversals corresponding to rotation around each axis, which
+is consistent with the structure of SO(3) manifold. The
+process of learning SO(3) manifold is a challenging task,
+and previous works assumed that the group member corre-
+sponding to each transformation is given (Quessard et al.,
+2020; Anonymous, 2022). In contrast, we only use the ob-
+servations corresponding to similar actions during training
+and not the group members themselves. As we see later, this
+is critical in settings such as RL, where group information
+is unavailable. We were not able to produce a similar la-
+tent traversal for VAE due to collapse when rotating around
+some axes.
+7.1.3. CONFORMAL GROUP FOR DOUBLE-BUMP
+WORLD
+The double-bump world consists of a rectangular bump sig-
+nal and a triangular bump signal, both of which have been
+cyclically shifted and superimposed. Any transformation in
+this dataset can be denoted as a pair (∆1,∆2) which cycli-
+cally shifts the rectangular bump by ∆1 and the triangular
+bump by ∆2. In our experiments, the length of the signal
+is 64, and the length of the bump is 16. We used confor-
+mal loss of Equation (8) in this experiment. Figure 3(left)
+2Note that while SO(3) manifold is 3-dimensional, its isomet-
+ric embedding requires a higher number of dimensions. Using a
+larger embedding dimension also often helps with the optimization
+of our symmetry regularization loss.
+6
+Transformation Coding: Simple Objectives for Equivariant Representations
+shows the random project of the embedding, where the col-
+ors change as the triangle bump moves. The ﬁgure suggests
+that transformation coding is able to successfully learn to
+represent a data point using the location of two bumps.
+7.2. Experiments on Active and Passive Decomposition
+In this section, we ﬁrst contrast active and passive decom-
+position in their ability to disentangle the two bumps in the
+double bump world. We observe that while both can decom-
+pose the embedding into a product form SO(2) × SO(2),
+only active decomposition leads to disentanglement. Sec-
+tion 7.2.2 applies active decomposition to a more complex
+setting of ego-motion, where transformation coding can de-
+compose the representation of the agent’s state into location
+and orientation.
+7.2.1. DECOMPOSITION OF THE DOUBLE-BUMP WORLD
+Next, we compare the active and passive decomposition for
+the same double-bump world. While the ground truth is
+SO(2) × SO(2), the method uses the larger group E(2) ×
+E(2). In the active case, each subgroup moves one of
+the bumps, the loss of Equation (9) is used to learn an
+embedding for each subgroup. In the passive case, both
+bumps move randomly.
+Figure 4 compares the decomposed embedding found in
+each case. While in both cases, the SO(2) × SO(2) torus
+is decomposed into a product of circles, only the active case
+successfully disentangles the two bumps. Note that the color
+of each point is based on the location of the triangle bump.
+Our results agree with Caselles-Dupr´e et al. (2019) who
+claim that learning a disentangled representation requires
+interaction with the environment; see also (Painter et al.,
+2020; Mita et al., 2021). However, we note that while the
+disentangling of the bump movements do not happen in
+the passive case, we can still successfully “decompose” the
+embedding.
+7.2.2. ACTIVE DECOMPOSITION FOR EGO-MOTION
+Figure 7. Top
+view
+of
+the
+room
+We used a modiﬁed version of the
+single-room
+environment
+of
+Mini-
+World (Chevalier-Boisvert, 2018) for
+this experiment. The agent is standing in
+a 3D room containing eight differently
+colored boxes around the walls. A map
+of the room can be seen in Figure 7. An
+observation consists of a ﬁrst-person
+view of the room, downsampled to
+32 × 32 pixels. The agent can rotate left/right or move
+forward/backward. We learn an E(2) × E(2) equivariant
+embedding using the active decomposition objective
+of Equation (9). Each mini-batch consists of 64 random
+observations and the result of applying all four actions in
+Figure 6.
+Decomposition of the ego-motion manifold using
+E(2) × E(2) equivariant coding. The dataset contains a ﬁrst-
+person view of a room. Transformations include right-left rotation
+and forward-backward movement. The equivariant embedding
+is produced by active decomposition using these two transfor-
+mations, where the ring-structured manifold corresponds to the
+rotation action, and the smaller manifold corresponds to transla-
+tions. Color-coding shows the true angle of the image. The black
+square markers show the traversal of the embedding as the agent
+rotates while standing in the middle of the room. Note that in the
+second manifold, black squares are concentrated in the center.
+those states (4 × 64 samples in total).
+Figure 6 visualizes the embedding of the input in two sub-
+ﬁgures, where the more prominent ﬁgure shows the embed-
+ding corresponding to the rotation action, and the more pe-
+tite ﬁgure (bottom right) shows the embedding correspond-
+ing to forward-backward movement. The ﬁrst ﬁgure also
+shows the ﬁrst-person view when the agent rotates while
+standing in the middle of the room. The corresponding
+markers collapse around the center of the second embed-
+ding, demonstrating an intuitive embedding, parameterized
+by rotation angle and location. Walking straight across the
+room also produces the expected behavior of traversing the
+second manifold while the rotation angle, for the most part,
+remains ﬁxed (not shown).
+7.3. Quantitave Evaluation in Downstream Tasks
+This section quantitatively shows the effectiveness of trans-
+formation coding for World Modelling and RL.
+7.3.1. WORLD MODELLING
+We select Atari games Pong and Space Invader for the world
+modeling experiments as our environment. These environ-
+ments are previously used by (Kipf et al., 2020) to evaluate
+7
+Transformation Coding: Simple Objectives for Equivariant Representations
+Table 1. Hits at Rank 1 (H@1) and Mean Reciprocal Rank (MRR)
+of different method. We report our models performance over 5
+random seeds for Pong and Space Invaders.
+ENVIRONMENT
+METHOD
+H@1
+MRR
+ATARI PONG
+WORLD MODEL(AE)
+23.8± 3.3
+44.7± 2.4
+WORLD MODEL(VAE)
+1.0± 0.0
+5.1± 0.1
+C-SWM
+36.5± 5.6
+56.2± 6.2
+OURS
+45.2± 3.4
+60.2± 3.9
+SPACE INVADERS
+WORLD MODEL(AE)
+40.2± 3.3
+59.6± 3.5
+WORLD MODEL(VAE)
+1.0±5.3
+5.3± 0.1
+C-SWM
+48.5± 7.0
+66.1± 6.6
+OURS
+54.2± 6.3
+68.7± 5.1
+their model, Contrastive Structured World Model (C-SWM).
+We train the encoder using our Euclidean transformation
+coding objective, freeze it, and then learn a Multi-Layer
+Perceptron (MLP) based transition function in the latent
+space. Our evaluation scheme follows (Kipf et al., 2020).
+We report Hits at Rank 1 (H@1) and Mean Reciprocal Rank
+(MRR), which are invariant to the embedding scale. These
+evaluation metrics measure the relative closeness of the next
+state’s representation predicted by the transition model and
+the representation of the observed next state. To measure
+the relative closeness, we use a set of reference state rep-
+resentations (embedding of random observations from the
+experience buffer). Table 1 reports these measures and show
+that a simple transition model learned on top of our embed-
+ding outperforms C-SWM in both games. Other reported
+baselines use an AutoEncodcer (AE) and a Variational Au-
+toEncoder (VAE) to learn embeddings.
+7.3.2. REINFORCEMENT LEARNING
+Next, we consider three Mujoco environments: InvertedPen-
+dulum, Reacher, and Swimmer from OpenAI Gym (Brock-
+man et al., 2016). We introduce two variations of our model
+to test the usefulness of transformation coding in the con-
+text of RL. The ﬁrst variation uses a ﬁxed encoder that is
+pretrained using transformation coding and then trains an
+MLP heads for function approximations in the downstream
+RL algorithm (TC-decoupled); that is, the low-dimensional
+embedding is used as a substitute for the high-dimensional
+input data without further adjustment. The second varia-
+tion allows for ﬁnetuning during the reinforcement learning
+stage (TC-ﬁnetuned). We designed two other baseline mod-
+els using AutoEncoder (AE) to train the encoder and call
+them AE-decoupled and AE-ﬁnetuned. We use Proximal
+Policy Optimization (PPO) (Schulman et al., 2017) as the
+underlying RL algorithm. To evaluate the data-efﬁciency
+of these models, we report the average reward collected
+over 10 episodes in the ﬁrst 100,000 steps for Reacher and
+Swimmer and 30,000 steps for Inverted Pendulum in Table 2
+(since Inverted Pendulum generally learns faster, we took a
+fewer number of steps.)
+Table 2. Average reward collected over 10 episodes for various
+models in Inverted Pendulum, Reacher and Swimmer. We provide
+the standard error for each of them using 5 different random seeds
+for each experiment.
+METHODS
+INVERTEDPENDULUM
+REACHER
+SWIMMER
+VANILLA
+500± 150
+-11± 2.5
+25.6± 3.4
+AE-DECOUPLED
+30± 15
+-13± 3.0
+16± 3.9
+AE-FINETUNED
+580± 130
+-11.5± 3.2
+26± 4.3
+TC-DECOUPLED
+800± 180
+-14.5± 3.1
+21± 4.1
+TC-FINETUNED
+950± 50
+-10± 3.4
+31.5± 3.9
+We see that learned representations adequately capture the
+structure of the environment in Inverted Pendulum since
+the RL agent just trained on the ﬁxed representation (TC-
+decoupled) outperforms vanilla PPO. In contrast, AE does
+not seem to capture the structure, at least not in a form
+suitable for learning a policy. In Reacher, TC-decoupled
+performs poorly compared to AE-decoupled. We believe
+that this is because the representation is focused on trans-
+formations due to the agent’s actions, and details that can
+be valuable from the reward’s perspective can be ignored –
+in this case, the small object that the Reacher should reach.
+This observation points to a signiﬁcant limitation of our
+approach, that is in this case resolved by ﬁnetuning. Like
+Reacher, we see that learning the agent’s transformations
+is not enough to get all the reward information as the back-
+ground movement decides how far the agent has swum.
+Indeed, allowing the encoder to ﬁnetune allows the repre-
+sentations to reﬂect the reward information and improve
+performance.
+Conclusion
+Transformation coding is shown to be a simple, intuitive,
+and yet effective approach for learning equivariant represen-
+tations, where the group action on the input is potentially
+non-linear and unknown. The idea is to learn a bijection that
+is regularized towards simple actions of the abstract group
+on the latent space. Symmetry regularization loss is speciﬁc
+to each group and relies on the preservation of certain quan-
+tities. This is reminiscent of the uniﬁcation of geometries
+using group theory in Klein’s Erlangen program; preserva-
+tion of distance, inner product, and angle are used to deﬁne
+latent representations equivariant to Euclidean, orthonormal,
+and conformal groups. This also points to an important lim-
+itation: a recipe for creating symmetry regularization losses
+for general Lie groups is currently missing. While this pa-
+per showcases the effectiveness of transformation coding
+in several qualitative and quantitative experiments, we see
+many avenues for further exploration in future works.
+8
+Transformation Coding: Simple Objectives for Equivariant Representations
+References
+Anonymous. Learning symmetric representations for equiv-
+ariant world models.
+In Submitted to The Tenth In-
+ternational Conference on Learning Representations,
+2022. URL https://openreview.net/forum?
+id=D637S6zBRLD. under review.
+Bengio, Y., Courville, A., and Vincent, P. Representation
+learning: A review and new perspectives. IEEE transac-
+tions on pattern analysis and machine intelligence, 35(8):
+1798–1828, 2013.
+Brockman, G., Cheung, V., Pettersson, L., Schneider, J.,
+Schulman, J., Tang, J., and Zaremba, W. Openai gym.
+arXiv preprint arXiv:1606.01540, 2016.
+Burgess, C. P., Higgins, I., Pal, A., Matthey, L., Watters, N.,
+Desjardins, G., and Lerchner, A. Understanding disen-
+tangling in beta-vae. arXiv preprint arXiv:1804.03599,
+2018.
+Caselles-Dupr´e, H., Garcia-Ortiz, M., and Filliat, D.
+Symmetry-based disentangled representation learning
+requires interaction with environments. arXiv preprint
+arXiv:1904.00243, 2019.
+Chen, T., Kornblith, S., Norouzi, M., and Hinton, G. A
+simple framework for contrastive learning of visual rep-
+resentations. In International conference on machine
+learning, pp. 1597–1607. PMLR, 2020.
+Chen, X., Duan, Y., Houthooft, R., Schulman, J., Sutskever,
+I., and Abbeel, P. Infogan: Interpretable representation
+learning by information maximizing generative adversar-
+ial nets. arXiv preprint arXiv:1606.03657, 2016.
+Chevalier-Boisvert, M. gym-miniworld environment for
+openai gym. https://github.com/maximecb/
+gym-miniworld, 2018.
+Cohen, T. and Welling, M. Group equivariant convolutional
+networks. In International conference on machine learn-
+ing, pp. 2990–2999. PMLR, 2016.
+Cohen, T. S. and Welling, M.
+Transformation proper-
+ties of learned visual representations.
+arXiv preprint
+arXiv:1412.7659, 2014.
+Cohen, T. S., Geiger, M., and Weiler, M.
+A gen-
+eral theory of equivariant CNNs on homogeneous
+spaces.
+In Wallach, H., Larochelle, H., Beygelz-
+imer, A., d'Alch´e-Buc, F., Fox, E., and Garnett, R.
+(eds.), Advances in Neural Information Processing
+Systems, volume 32, pp. 9145–9156. Curran Asso-
+ciates, Inc., 2019.
+URL https://proceedings.
+neurips.cc/paper/2019/file/
+b9cfe8b6042cf759dc4c0cccb27a6737-Paper.
+pdf.
+Ermolov, A., Siarohin, A., Sangineto, E., and Sebe, N.
+Whitening for self-supervised representation learning. In
+International Conference on Machine Learning, pp. 3015–
+3024. PMLR, 2021.
+Falorsi, L., de Haan, P., Davidson, T. R., De Cao, N.,
+Weiler, M., Forr´e, P., and Cohen, T. S. Explorations in
+homeomorphic variational auto-encoding. arXiv preprint
+arXiv:1807.04689, 2018.
+Fan, H., Su, H., and Guibas, L. J. A point set generation net-
+work for 3d object reconstruction from a single image. In
+Proceedings of the IEEE conference on computer vision
+and pattern recognition, pp. 605–613, 2017.
+Finzi, M., Welling, M., and Wilson, A. G.
+A practi-
+cal method for constructing equivariant multilayer per-
+ceptrons for arbitrary matrix groups.
+arXiv preprint
+arXiv:2104.09459, 2021.
+Hadsell, R., Chopra, S., and LeCun, Y. Dimensionality
+reduction by learning an invariant mapping. In 2006
+IEEE Computer Society Conference on Computer Vision
+and Pattern Recognition (CVPR’06), volume 2, pp. 1735–
+1742. IEEE, 2006.
+He, K., Fan, H., Wu, Y., Xie, S., and Girshick, R. Mo-
+mentum contrast for unsupervised visual representation
+learning. In Proceedings of the IEEE/CVF Conference
+on Computer Vision and Pattern Recognition, pp. 9729–
+9738, 2020.
+Higgins, I., Amos, D., Pfau, D., Racaniere, S., Matthey,
+L., Rezende, D., and Lerchner, A.
+Towards a deﬁ-
+nition of disentangled representations. arXiv preprint
+arXiv:1812.02230, 2018.
+Hinton, G. E., Krizhevsky, A., and Wang, S. D. Trans-
+forming auto-encoders. In International conference on
+artiﬁcial neural networks, pp. 44–51. Springer, 2011.
+Kingma, D. P. and Welling, M. Auto-encoding variational
+bayes. arXiv preprint arXiv:1312.6114, 2013.
+Kipf, T., van der Pol, E., and Welling, M. Contrastive learn-
+ing of structured world models. In International Confer-
+ence on Learning Representations, 2020. URL https:
+//openreview.net/forum?id=H1gax6VtDB.
+Kondor, R. and Trivedi, S. On the generalization of equivari-
+ance and convolution in neural networks to the action of
+compact groups. In International Conference on Machine
+Learning, pp. 2747–2755. PMLR, 2018.
+Kulkarni, T. D., Whitney, W., Kohli, P., and Tenenbaum,
+J. B. Deep convolutional inverse graphics network. arXiv
+preprint arXiv:1503.03167, 2015.
+9
+Transformation Coding: Simple Objectives for Equivariant Representations
+Langley, P. Crafting papers on machine learning. In Langley,
+P. (ed.), Proceedings of the 17th International Conference
+on Machine Learning (ICML 2000), pp. 1207–1216, Stan-
+ford, CA, 2000. Morgan Kaufmann.
+Lenc, K. and Vedaldi, A. Learning covariant feature de-
+tectors. In European conference on computer vision, pp.
+100–117. Springer, 2016.
+Lenssen, J. E., Fey, M., and Libuschewski, P.
+Group
+equivariant capsule networks. In Bengio, S., Wallach,
+H., Larochelle, H., Grauman, K., Cesa-Bianchi, N., and
+Garnett, R. (eds.), Advances in Neural Information Pro-
+cessing Systems, volume 31, pp. 8844–8853. Curran As-
+sociates, Inc., 2018. URL https://proceedings.
+neurips.cc/paper/2018/file/
+c7d0e7e2922845f3e1185d246d01365d-Paper.
+pdf.
+Mita, G., Filippone, M., and Michiardi, P. An identiﬁable
+double vae for disentangled representations. In Interna-
+tional Conference on Machine Learning, pp. 7769–7779.
+PMLR, 2021.
+Oord, A. v. d., Li, Y., and Vinyals, O. Representation learn-
+ing with contrastive predictive coding. arXiv preprint
+arXiv:1807.03748, 2018.
+Painter, M., Hare, J., and Prugel-Bennett, A. Linear disen-
+tangled representations and unsupervised action estima-
+tion. arXiv preprint arXiv:2008.07922, 2020.
+Qi, C. R., Su, H., Mo, K., and Guibas, L. J. Pointnet:
+Deep learning on point sets for 3D classiﬁcation and
+segmentation. In Proceedings of the IEEE conference on
+computer vision and pattern recognition, pp. 652–660,
+2017.
+Quessard, R., Barrett, T. D., and Clements, W. R. Learning
+group structure and disentangled representations of dy-
+namical environments. arXiv preprint arXiv:2002.06991,
+2020.
+Rafﬁn, A., Hill, A., Gleave, A., Kanervisto, A., Ernestus,
+M., and Dormann, N. Stable-baselines3: Reliable rein-
+forcement learning implementations. Journal of Machine
+Learning Research, 22(268):1–8, 2021.
+URL http:
+//jmlr.org/papers/v22/20-1364.html.
+Ravanbakhsh, S., Schneider, J., and Poczos, B. Equivariance
+through parameter-sharing. In International Conference
+on Machine Learning, pp. 2892–2901. PMLR, 2017.
+Sabour, S., Frosst, N., and Hinton, G. E. Dynamic routing
+between capsules. In Guyon, I., Luxburg, U. V., Bengio,
+S., Wallach, H., Fergus, R., Vishwanathan, S., and
+Garnett, R. (eds.), Advances in Neural Information Pro-
+cessing Systems, volume 30, pp. 3856–3866. Curran As-
+sociates, Inc., 2017. URL https://proceedings.
+neurips.cc/paper/2017/file/
+2cad8fa47bbef282badbb8de5374b894-Paper.
+pdf.
+Schulman, J., Wolski, F., Dhariwal, P., Radford, A., and
+Klimov, O. Proximal policy optimization algorithms,
+2017.
+Tenenbaum, J. B., De Silva, V., and Langford, J. C. A
+global geometric framework for nonlinear dimensionality
+reduction. science, 290(5500):2319–2323, 2000.
+Tian, Y., Krishnan, D., and Isola, P. Contrastive multiview
+coding. arXiv preprint arXiv:1906.05849, 2019.
+Villar, S., Hogg, D., Storey-Fisher, K., Yao, W., and Blum-
+Smith, B. Scalars are universal: Equivariant machine
+learning, structured like classical physics. Advances in
+Neural Information Processing Systems, 34, 2021.
+Wood, J. and Shawe-Taylor, J. Representation theory and
+invariant neural networks. Discrete applied mathematics,
+69(1-2):33–60, 1996.
+Worrall, D. E., Garbin, S. J., Turmukhambetov, D., and
+Brostow, G. J. Interpretable transformations with encoder-
+decoder networks. In Proceedings of the IEEE Interna-
+tional Conference on Computer Vision, pp. 5726–5735,
+2017.
+Wu, Z., Song, S., Khosla, A., Yu, F., Zhang, L., Tang,
+X., and Xiao, J. 3d shapenets: A deep representation for
+volumetric shapes. In Proceedings of the IEEE conference
+on computer vision and pattern recognition, pp. 1912–
+1920, 2015.
+Zaheer, M., Kottur, S., Ravanbakhsh, S., Poczos, B.,
+Salakhutdinov, R. R., and Smola, A. J.
+Deep sets.
+In Guyon, I., Luxburg, U. V., Bengio, S., Wallach,
+H., Fergus, R., Vishwanathan, S., and Garnett, R.
+(eds.), Advances in Neural Information Processing
+Systems, volume 30, pp. 3391–3401. Curran Asso-
+ciates, Inc., 2017.
+URL https://proceedings.
+neurips.cc/paper/2017/file/
+f22e4747da1aa27e363d86d40ff442fe-Paper.
+pdf.
+Zbontar, J., Jing, L., Misra, I., LeCun, Y., and Deny, S.
+Barlow twins: Self-supervised learning via redundancy
+reduction. arXiv preprint arXiv:2103.03230, 2021.
+10
+Transformation Coding: Simple Objectives for Equivariant Representations
+A. Proof of Claims
+Proof. of Claim 1
+Let ∼f be an equivalence relation on X, such that two points are “equivalent” if they have the same embedding x ∼x′ ⇔
+f(x) = f(x′). We use [x]∼to denote the equivalence class of x. To get an intuition for this result, ﬁrst consider an injective
+f, where the equivalence classes are trivial [x]∼= x. In this case for any G-set X, f is G-equivariant with G-action on Z
+deﬁned by
+tZ(g,y) ≐f(tX(g,f −1(y)))
+∀g,y ∈G × Z
+(10)
+Now to see why f is equivariant to any action tX and the corresponding tZ deﬁned above, simply replace the deﬁnition of
+tZ into deﬁnition of equivariance Equation (1)
+tZ(g,f(x)) = f(tX(g,f −1(f(x)))) = f(tX(g,x))
+(11)
+For general functions, note that f −1(f(x)) = [x]∼. The equation above makes sense iff tX(g,x′) = tX(g,x′′)∀x′,x′′ ∈[x]∼,
+which is basically the assumption of Equation (2). This means [tX(g,x)]∼≐[tX(g,x)]∼, and using the tZ of Equation (10)
+in the deﬁnition of equivariance, we see that its condition is satisﬁed
+tZ(g,f(x)) = f(tX(g,f −1(f(x)))) = f(tX(g,[x]∼)) = f([tX(g,x)]∼) = f(tX(g,x))
+(12)
+Figure 8. The E(3) equivariant representation of the mountain-car. Each state x ∈X
+is a concatenation of two consecutive frames so as to inform about both position and
+velocity of the car. The colors encode the true position of the car, and the brightness of
+the colors shows the positive-negative velocity. The transformation tX(g, x) changes the
+velocity through positive/negative acceleration. By preserving the distance between pairs
+of instances in which the same acceleration is applied, transformation coding is able to
+recover a manifold that is parameters by velocity and location.
+B. Additional Experiment: the Mountain Car
+Figure 9. VAE
+embedding
+for
+the Mountain Car
+example;
+compare
+againts Figure 8
+In the Mountain Car environment, an observation x consists of two consecutive frames that have
+been grayscaled and downsampled to 32 × 32 pixels. The action-space of the environment is a range
+of accelerations that can be applied to the car. Figure 8 shows the learned embedding in R3. Figure 8
+shows the learned embedding in R3. Colors show the change in the location and the brightness shows
+the velocity. The learned representaion is quite intuitive, and the model learns to parameterize the
+manifold using the location and velocity of the car.
+C. Addition of Invariant Features
+While we focused on equivariant codes, one may also consider an invariant component in the code
+which can account for variations in the data that are not due to transformations – that is, we have
+f ∶X →Z ×Y , where Y is the invariant part of the code that identiﬁes distinct orbits. Let f inv. ∶X →Y denote the invariant
+component of f. To learn f inv., one could use a loss of the form ℓ(f inv.(x) −f inv.(tX(g,x))) which enforces invariance for
+points on the same orbit. At the same time, an injection loss, similar to those of Section 4, pushes apart the points that are
+not in the same orbit. This invariant component is therefore very similar to what is used in contrastive coding.
+11
+Transformation Coding: Simple Objectives for Equivariant Representations
+D. Effect of Transformations on the Embedding Manifold
+When using transformation coding, the transformation can have a complex relationship with the ideal parameterizations of the
+manifold. For example, the location and velocity of the mountain-car or the pendulum (as ideal parameters for the manifold),
+are non-trivially related to the action that accelerates the movement. A natural question here is about the effect of the choice
+of transformation on the manifold. In practice, we observe that, in low-dimensional embedding, the geometry of the manifold
+is quite sensitive to the choice of transformation. As an example, Figure 10 presents an alternative embedding for the
+pendulum of Figure 1 obtained by simply decreasing the amount of time between taking an action, and observing its outcome
+from δt = .05 →δt = .01. Whether or not this (potential) sensitivity is a bug or feature may depend on the application setting.
+Figure 10. Alternative embedding for the pendulum.
+E. Implementation Details
+Pendulum and Mountain Car We use the same setting for both of
+these environments. The neural network ﬁrst applies three convo-
+lutional layers with 3 × 3 kernels, 24 output channels, and “same”
+padding, each followed by 2 × 2 max pooling and ReLU activation.
+Finally, a Multi-Layer Perceptron (MLP) with a single hidden layer of
+size 128 and ReLU activation is applied to embed the representation
+into R3. The model was trained for 5000 steps with the Adam opti-
+mizer set to a learning rate of 10−3. The log-barrier coefﬁcient was
+set to 1, and we used a weight decay coefﬁcient of 10−7.
+Bump World The neural network used for conformal coding experi-
+ments in Section 7.1.3 is a 4-layer MLP with hidden layers of size 128 and ReLU activation functions. The embedding space
+is R4 which is then randomly projected to R3 for visualization. The log-barrier coefﬁcient and weight decay coefﬁcient were
+both set to 10−7. The mini-batches used for training consist of 64 randomly sampled observations from the environment
+and their transformations via 15 randomly sampled transformations (16 × 64 samples in total). The model was trained for
+10,000 steps with the Adam optimizer set to a learning rate of 10−3.
+The neural network used in active and passive decomposition experiments in Section 7.2.1 is a 3-layer MLP with hidden
+layers of size 128 and ELU activation functions. The embedding space is R4 which we interpret as two R2s. We optimize
+the model for 5000 steps using the Adam optimizer with an initial learning rate of 10−2 which is halved every 1000. We use
+a barrier coefﬁcient of 1 and a weight decay coefﬁcient of 10−5. The mini-batches used for training consist of 64 randomly
+sampled observations from the environment and their transformations via 7 randomly sampled transformations (8 × 64
+samples in total).
+Gym Mini-world The neural network architecture and training settings are similar to those of the pendulum and mountain
+car experiments.
+Rotating chair The neural network used for the Chair dataset ﬁrst applies three convolutional layers with 3 × 3 kernels,
+increasing number of output channels from 16 to 32 to 64, 1 padding and stride of 2. It is followed by a ReLU activation.
+Finally, a Multi-Layer Perceptron (MLP) with a single hidden layer of size 128 and ReLU activation is applied to embed the
+representation into R16. The model was trained with 10000 unique rotations repeated with multiple initial points with the
+Adam optimizer set to a learning rate of 10−3. We stick to small rotation angles to make the setup similar to dynamical
+environments. The log-barrier loss coefﬁcient was set to 1, and we used a weight decay coefﬁcient of 10−7.
+Pong and Space Invaders The neural network used for the Chair dataset ﬁrst applies three convolutional layers with 7 × 7 ,
+5 × 5 and 3 × 3 kernels. We again increase the number of output channels from 16 to 32 to 64 and use a padding of 1 and
+stride of 2 for all of them. The convolutions are followed by ReLU activations. Finally, a linear layer is applied to embed the
+representation into R32. We train the encoder with samples collected from around 100k environment steps. The log-barrier
+loss coefﬁcient was again set to 1.
+Pendulum, Reacher and Swimmer The encoder and pre-training setting used for this part is similar to the one used for
+Pong and space invaders. We use an MLP to learn the policy from the extracted features. We use stable baselines 3 for our
+PPO implementation. (Rafﬁn et al., 2021).
+12

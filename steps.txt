@@ -1,0 +1,17 @@
+| Week  | You’ll Learn                        | We’ll Build                           |
+| ----- | ----------------------------------- | ------------------------------------- |
+| 1     | Python + APIs + Web scraping basics | Research paper downloader (arXiv)     |
+| 2     | PDF parsing with Python             | Extract text from PDF research papers |
+| 3     | Preprocessing + Sentence embeddings | Searchable representation of papers   |
+| 4     | Semantic search using FAISS         | Build basic search tool (AI-powered)  |
+| 5–6   | FastAPI (Python backend)            | Create search + summary API           |
+| 7–8   | React basics + HTML/CSS             | Make web interface (search, results)  |
+| 9–10  | Citation graph basics (Neo4j)       | Show graph of paper relationships     |
+| 11–12 | Trend analysis + Plotly             | Graph: How research grew over time    |
+| 13–14 | Recommendation basics               | Show papers based on user preferences |
+| 15–16 | Deploy with Docker                  | Launch your platform online           |
+
+
+1. pip install arxiv
+2. download pdfs
+3. pip install PyMuPDF
