@@ -1,0 +1,1434 @@
+Detecting Anomalies within Time Series using Local Neural Transformations
+Tim Schneider * 1 Chen Qiu * 2 3 Marius Kloft 3 Decky Aspandi Latif 1 Steffen Staab 1 4 Stephan Mandt 5
+Maja Rudolph 2
+Abstract
+We develop a new method to detect anomalies
+within time series, which is essential in many
+application domains, reaching from self-driving
+cars, ﬁnance, and marketing to medical diagno-
+sis and epidemiology. The method is based on
+self-supervised deep learning that has played a
+key role in facilitating deep anomaly detection on
+images, where powerful image transformations
+are available. However, such transformations are
+widely unavailable for time series. Addressing
+this, we develop Local Neural Transformations
+(LNT), a method learning local transformations
+of time series from data. The method produces an
+anomaly score for each time step and thus can be
+used to detect anomalies within time series. We
+prove in a theoretical analysis that our novel train-
+ing objective is more suitable for transformation
+learning than previous deep Anomaly detection
+(AD) methods. Our experiments demonstrate that
+LNT can ﬁnd anomalies in speech segments from
+the LibriSpeech data set and better detect inter-
+ruptions to cyber-physical systems than previous
+work. Visualization of the learned transformations
+gives insight into the type of transformations that
+LNT learns.
+1. Introduction
+Anomaly detection (AD) in time series is signiﬁcant in
+many industrial, medical, and scientiﬁc applications. For in-
+stance, undetected anomalies in water treatment facilities or
+chemical plants can bring harm to millions of people. Such
+systems need to be constantly monitored for anomalies.
+While AD has been an important ﬁeld in machine learning
+for several decades (Ruff et al., 2020), promising perfor-
+*Equal contribution 1University of Stuttgart, Germany 2Bosch
+Center for Artiﬁcial Intelligence 3TU Kaiserslautern, Germany
+4University of Southampton, UK
+5UC Irvine, USA. Corre-
+spondence to: Tim Schneider <timphillip.schneider@ipvs.uni-
+stuttgart.de>, Maja Rudolph <Maja.Rudolph@us.bosch.com>.
+mance gains have been primarily reported in applying deep
+learning methods to high-dimensional data such as images
+(Golan & El-Yaniv, 2018; Wang et al., 2019; Hendrycks
+et al., 2019; Bergman & Hoshen, 2020). With few excep-
+tions (Gidaris et al., 2018; Hundman et al., 2018; Shen et al.,
+2020), there is much less work on other domains such as
+time series. This may be attributed to the fact that some
+time series exhibit complex temporal dependencies and can
+be even more diverse than natural images. As detailed
+below, this paper attempts to integrate recent ideas from
+self-supervised AD of non-temporal data with modern deep
+learning architectures for sequence modeling.
+While unsupervised methods based on density estimation
+can yield poor results for AD (Nalisnick et al., 2018), a
+recent trend relying on self-supervision has proven superior
+performance. In this line of work, one uses auxiliary tasks,
+often based on data augmentation, both for training and
+anomaly scoring. Data augmentation usually relies on hand-
+designed data transformations such as rotations (Golan & El-
+Yaniv, 2018; Wang et al., 2019; Hendrycks et al., 2019). Qiu
+et al. (2021) showed that these transformations could instead
+be learned, thereby making self-supervised AD applicable
+to specialized domains beyond images. While this approach
+can identify an entire sequence as anomalous, it can still not
+be applied to detecting anomalies within time series (i.e., on
+a sub-sequence level).
+But this adaption is not straightforward: For AD within
+time series, both local semantics (the dynamics within a
+time window) and contextualized semantics (how the time
+window relates to the remaining time series) matter. To
+capture both, we propose an end-to-end approach that com-
+bines time series representations (Oord et al., 2018) with
+a novel transformation learning objective. As a result, the
+local transformations create different views of the data in the
+latent space (Rudolph et al., 2017) (as opposed to applying
+them to the data directly as in Qiu et al. (2021)).
+We develop Local Neural Transformations (LNT): a novel
+objective that combines representation learning with trans-
+formation learning. The encoder for feature extraction and
+the neural transformations are trained jointly on this loss.
+We show that the learned latent transformations can corre-
+spond to interpretable effects: in one experiment on speech
+arXiv:2202.03944v2  [cs.LG]  20 Feb 2022
+Detecting Anomalies within Time Series using Local Neural Transformations
+data (details in Section 5), LNT learns transformations that
+insert delays. Neural transformations are much more gen-
+eral than hand-crafted transformations, which for time series
+could be time warping, reﬂections, or shifts: as we illustrate,
+they can transform the data in ways unintuitive to humans
+but valuable for the downstream task of AD.
+We prove theoretically (Section 4) and show empirically
+(Section 5) that combining representation and transforma-
+tion learning is beneﬁcial for detecting anomalies within
+time series. LNT outperforms various AD techniques on
+benchmark data, including a baseline using the Contrastive
+Predictive Coding (CPC) loss as the anomaly score (de Haan
+& L¨owe, 2021). We evaluate the methods on public AD
+datasets for time series from cyber-physical systems. Fur-
+thermore, we detect artiﬁcial anomalies in speech data,
+which is challenging due to its complex temporal dynamics.
+In all experiments, LNT outperforms many strong baselines.
+To summarize, our contributions in this work are:
+1. A new method, LNT, for AD within time series.
+It uniﬁes time series representations with a novel
+approach for learning local transformations.
+A
+open-source pytorch implementation is available
+at
+https://github.com/boschresearch/
+local_neural_transformations.
+2. A theoretical analysis. We prove that both learning
+paradigms complement each other to avoid trivial solu-
+tions not appropriate for detecting anomalies.
+3. An extensive empirical study showing that LNT can de-
+tect anomalies within real cyber-physical data streams
+on par or better than many existing methods.
+2. Related Work
+We ﬁrst describe related work in time series AD, which is
+the problem we tackle in this work. We then describe related
+methods, speciﬁcally advances in self-supervised AD.
+2.1. Time series anomaly detection
+There are two types of anomalies in time series: local and
+global anomalies. Global anomalies are entire time series,
+with a single anomaly score for the entire series. Local
+anomalies occur at isolated timestamps or short time in-
+tervals within the time series, so each time point must be
+assigned with an anomaly score. This is the setting that
+we consider in this work. Existing methods for local AD
+in time series using deep learning can be divided into four
+categories, discussed in detail below: (i) methods based
+on sequence forecasting, (ii) autoencoders, (iii) generative
+sequence models, and (iv) other approaches.
+Forecasting methods
+A straightforward approach to de-
+tect anomalies in time series is to use the error of a time-
+series forecaster (predicting the value of the next time step
+from the time series’ past history) as an anomaly score. The
+rationale behind is that a forecaster trained on mostly nor-
+mal data will err less on normal than on abnormal data. We
+may use any time-series regression method as the forecaster,
+and various methods have been studied, including neural ar-
+chitectures such as recurrent neural networks (RNNs) (Mal-
+hotra et al., 2015; Filonov et al., 2016) and temporal convo-
+lutional neural networks (TCNs) (He & Zhao, 2019; Munir
+et al., 2019), where the convolution operation is applied
+along the temporal dimension only.
+Autoencoders
+To detect anomalies within time series,
+AEs have been combined with various neural network ar-
+chitectures, including RNNs (Malhotra et al., 2016) and
+TCNs (Thill et al., 2020) or variants (Zhang et al., 2019).
+Audibert et al. (2020) propose an architecture based purely
+on dense layers using a combination of two AEs connected
+with the adversarial loss. Again, the rational of using such
+approaches for AD is that after training on normal data, a
+high reconstruction error can be used to detect anomalies.
+Deep
+generative
+models
+Variational
+autoencoders
+(VAEs) (Kingma & Welling, 2014) have frequently been
+combined with RNNs (S¨olch et al., 2016; Park et al., 2018)
+to detect anomalies within time series. Pereira & Silveira
+(2018) combine an RNN with temporal self-attention.
+Guo et al. (2018) use gated recurrent units (GRUs) in
+combination with a gaussian mixture model. Su et al. (2019)
+augment a GRU-based VAE with a normalizing ﬂow and a
+linear Gaussian state-space model. Generative adversarial
+networks (Goodfellow et al., 2014) have been used for
+AD within time series, taking either the discriminator’s
+error (Liang et al., 2021) or the generator’s residuals (Zhou
+et al., 2019) as an anomaly score. Li et al. (2019) use a
+weighted combination of both. These approaches have been
+combined with TCNs (Zhou et al., 2019) and RNNs (Niu
+et al., 2020; Geiger et al., 2020).
+Other methods
+Some of the above-described approaches
+have been used in combination. For instance, Zhao et al.
+(2020) combine TCNs and LSTMs. Shen et al. (2020) com-
+bine a dilated RNN with a deep multi-sphere hypersphere
+classiﬁer on the cluster centers of a hierarchical clustering
+procedure, with regularizers encouraging orthogonal centers
+at each layer and prediction regularizers encouraging useful
+representations in intermediate layers. Deng & Hooi (2021)
+construct a graph with nodes for each feature and edges rep-
+resenting relations between features; these are learned and
+combined with a graph-based attention mechanism. Car-
+mona et al. (2021) employ a TCN as an encoder to train a
+hypersphere classiﬁer in the latent space, with the option of
+Detecting Anomalies within Time Series using Local Neural Transformations
+including known anomalies into training.
+2.2. Self-supervised anomaly detection
+Recently, there has been growing interest in tackling AD
+with self-supervised learning.
+The core idea of self-
+supervised learning is to devise training tasks, often based
+on data augmentation, that guide the model to learn useful
+representations of the data. In self-supervised AD, per-
+formance on the auxiliary tasks can be used for anomaly
+scoring. This is justiﬁed by the principle of inlier priority
+(Wang et al., 2019) which posits that a self-supervised ap-
+proach will prioritize solving its training task for inliers.
+End-to-end detection methods based on transformation pre-
+diction (Golan & El-Yaniv, 2018; Hendrycks et al., 2019)
+have been designed for image AD. However, they require
+effective hand-crafted transformations while for data types
+beyond images, it is hard to design effective transformations
+by hand. Previous works proposed to utilize random afﬁne
+transformations (Bergman & Hoshen, 2020) or data-driven
+neural transformations (Qiu et al., 2021) for AD. Neural
+transformations have been used to detect entire anomalous
+sequences. However, when the neural transformation learn-
+ing approach of Qiu et al. (2021) is applied to the task of
+local anomaly detection, it can lead to trivial transforma-
+tions that are not suitable for AD. Our work proves this and
+introduces a novel local transformation learning objective.
+Alternatively, de Haan & L¨owe (2021) propose to use the
+training criterion of CPC, a self-supervised approach with-
+out data augmentation, for anomaly detection. CPC learns
+local time series representations via contrastive predictions
+of future representations (Oord et al., 2018). However, the
+CPC loss is not a good ﬁt for scoring anomalies since it
+requires a random draw of negative samples, which leads to
+a biased estimation or high memory cost during test time
+(de Haan & L¨owe, 2021). Our work overcomes this.
+3. Method
+In this work, we propose Local Neural Transformations
+(LNT), a new framework for detecting anomalies within
+time series data. LNT has two components: feature extrac-
+tion and feature transformations. Given an input sequence,
+an encoder produces an embedding for each time step, en-
+coding relevant information from the current time window.
+These features are then transformed by applying distinct
+neural networks to each embedding, producing different la-
+tent views. The views are trained to fulﬁll two requirements;
+the views should be diverse and semantically meaningful,
+i.e., they should reﬂect both local dynamics as well as how
+the observations ﬁt into the larger context of the time series.
+The requirements are encouraged via self-supervision.
+Speciﬁcally, two aspects of LNT are self-supervised – it
+input
+x1:t
+encoder
+Local Neural
+Transformations
+LDDCL
+(eq. 2)
+LCPC
+(eq. 1)
+score
+ℓt
+training
+scoring
+Figure 1. Overview of Local Neural Transformations (LNT): neu-
+ral transformations are jointly trained with the encoder from CPC
+and DDCL losses; at test time yielding anomaly scores ℓt on a
+sub-sequence level given a series x1:t.
+combines two different contrastive losses. One of the con-
+trastive losses, CPC, guides the representation learning that
+guarantees the encoder of LNT to produce good semantic
+time series representations that generalize well to unseen
+test data. The second contrastive loss, a novel dynamic
+deterministic contrastive loss (DDCL), contrasts different
+latent views of each time step to encourage the latent views
+to be diverse and semantically representative of the time
+series, both in a local and in a contextualized sense.
+LNT follows the general paradigm of self-supervised AD.
+During training, the capability to contrast the data views pro-
+duced by the transformations improves for the normal data,
+while it deteriorates for anomalies. Figure 1 summarizes the
+main components of LNT. Given a (potentially multivariate)
+time series x1:t := (x1, . . . , xt)T ; xt ∈Rd, our method
+should output scores ℓt for each individual time step, repre-
+senting the likelihood that the observation in this time step
+is an anomaly. The inputs are processed by an encoder that
+is trained jointly with the local neural transformations.
+Before presenting local transformation learning and the
+DDCL in Section 3.2, we will ﬁrst describe the encoder
+and the CPC-loss in Section 3.1. Then, we discuss how
+a trained model is used to detect anomalies. Finally, in
+Section 4, we provide theoretical arguments for combining
+transformation learning with representation learning.
+3.1. Local Time Series Representations
+The LNT architecture has two components, a feature extrac-
+tor (encoder) and an anomaly detector (local neural trans-
+formations). The encoder maps a sequence of samples to
+a sequence of local latent representations zt and is trained
+using the principles of Contrastive Predictive Coding (CPC)
+(Oord et al., 2018). We use the same architecture as Oord
+et al. (2018). The representations produced by the encoder
+zt = genc(xt) are summarized with an autoregressive mod-
+ule into context vectors ct = gar(z≤t). For all t and all
+prediction steps k, we sample a set X of size N from the
+training data that contains one positive pair (xt, xt+k) and
+N−1 negative pairs (xt, xj), where xj is randomly sampled
+Detecting Anomalies within Time Series using Local Neural Transformations
+RNN
+RNN
+RNN
+zt
+zt−1
+zt−2
+· · ·
+zt+k
+ct
+encoder
+encoder
+encoder
+encoder
+encoder
+encoder
+xt
+xt−1
+xt−2
+. . .
+xt+k
+. . .
+Local Transformations
+Wkct
+z(l)
+t+k
+push
+pull
+Figure 2. LNT on latent representations zt resulting in transformed
+views Tl(zt) - it can be viewed as pushing and pulling representa-
+tions in latent space with the Dynamic Deterministic Contrastive
+Loss (DDCL)
+from the same mini batch. The CPC loss contrasts linear
+k-step future predictions Wkct against negative samples:
+LCPC = −EX∼D
+"
+log
+exp(zT
+t+kWkct)
+P
+X exp(zT
+j Wkct)
+#
+.
+(1)
+It encourages the context representation ct to be predic-
+tive of nearby local representations zt+k.
+Optimizing
+Equation (1) relates to maximizing the mutual information
+(Tschannen et al., 2019) between the context representation
+ct and nearby time points xt+k to produce good represen-
+tations (zt and ct) that can be used in downstream tasks,
+including AD.
+3.2. Local Neural Transformations
+The second part of the LNT architecture (as shown in Fig-
+ure 1) introduces an auxiliary task for AD. The time series
+representations zt are processed by local neural transforma-
+tions to produce different views of each embedding. This
+operation relates to data augmentation but has two major
+differences: First, the transformations are not applied at the
+data level but in the latent space, producing latent views
+of each time window. Second, the transformations are not
+hand-crafted as is often done in computer vision, where ro-
+tation, cropping and blurring are popular augmentations, but
+are instead directly learned during training (Tamkin et al.,
+2020; Qiu et al., 2021).
+The neural transformations are L neural networks Tl(·) with
+parameters θl. They are applied to each latent representation
+zt to produce different latent views z(l)
+t
+= Tl(zt), as shown
+in Figure 2. Each of the transformed views is encouraged to
+be predictive of the context at different time horizons k by a
+loss contribution
+ℓ(k,l)
+t
+(x≤t) = −log
+h
+ z(l)
+t , Wkct−k
+
+h
+ z(l)
+t , Wkct−k
+
++ P
+m̸=l
+h
+ z(l)
+t , z(m)
+t
+,
+which simultaneously pushes different views of the same
+latent representations apart from each other. The notation
+h(zi, zj) := exp
+zT
+i zj
+∥zi∥∥zj∥is deﬁned as the exponentiated
+cosine similarity in the embedding space. Unlike most con-
+trastive losses, where the negative samples are drawn from a
+noise distribution (Gutmann & Hyv¨arinen, 2012), the other
+views to contrast against are constructed deterministically
+from the same input (Qiu et al., 2021). The loss contribu-
+tions of each time-step t, each transformation l, and each
+time horizon k are combined to produce the Dynamic De-
+terministic Contrastive Loss (DDCL):
+LDDCL = Ex1:T ∼D
+" K
+X
+k=1
+T
+X
+t=1
+L
+X
+l=1
+ℓ(k,l)
+t
+(x≤t)
+#
+.
+(2)
+During training, the two objectives (Equations (1) and (2))
+are optimized jointly using a uniﬁed loss,
+L = LCPC + λ · LDDCL
+(3)
+and a balancing hyperparameter λ.
+As depicted by orange arrows in Figure 2, LDDCL can in-
+tuitively be interpreted as pushing and pulling different
+representations in latent space. The numerator pulls the
+learned transformations z(l)
+t+k close to Wkct ensuring se-
+mantic views, while the denominator pushes different views
+apart, ensuring diversity in the learned transformations.
+3.2.1. SCORING OF ANOMALIES
+After training LNT on a dataset of typical time series, we
+can use the DDCL for AD. Given a test sequence x1:T ,
+we evaluate the contribution of individual time steps to
+LDDCL (Equation (2)). The score for each time point t in the
+sequence is,
+ℓt(x≤t) =
+K
+X
+k=1
+L
+X
+l=1
+ℓ(k,l)
+t
+(x≤t)
+(4)
+The higher the score, the more likely the series exhibits ab-
+normal behavior at time t. Unlike CPC-based AD (de Haan
+& L¨owe, 2021), this anomaly score has the advantage of be-
+ing deterministic and thus there is no need to draw negative
+samples from a proposal or noise distribution.
+4. Analysis
+Our experiments in Section 5.5 show that LNT empirically
+outperforms CPC on various AD tasks. However, since the
+LNT architecture (Figure 1) is trained on two losses jointly
+(the DDCL and CPC losses), the natural question arises: are
+both losses necessary or could we just train on the DDCL
+loss alone? The following analysis demonstrates the value
+of considering both losses jointly.
+Detecting Anomalies within Time Series using Local Neural Transformations
+The following theorem shows that, if we trained the LNT
+architecture (i.e. the encoder and transformations Ti) only
+on the LDDCL loss (without the LCPC loss), the optimal solu-
+tion would collapse to a constant encoder, a phenomenon
+known as the manifold collapse in deep AD (Ruff et al.,
+2018). Thus the CPC loss acts as a regularizer in our DDCL
+framework to avoid the manifold collapse; it is thus strictly
+necessary.
+Theorem 1. Let gθ
+enc and gθ
+ar be arbitrary encoders (in-
+cluding biases) with learned parameters θ, and let Lθ
+DDCL
+be the corresponding DDCL loss. Then there exist con-
+stant encoders g˜θ
+enc and g˜θ
+ar (i.e., ∃˜θ, a, b ∀x, z : g˜θ
+enc(x) =
+a, g˜θ
+ar(z) = b) with
+L
+˜θ
+DDCL ≤Lθ
+DDCL.
+Proof. Let gθ
+enc and gθ
+ar be arbitrary encoders (including
+biases) with learned parameters θ (for notational simplicity
+of the proof we understand the additional parameter W as
+included into θ), and let Lθ
+DDCL be the corresponding DDCL
+loss. We observe from Equation (2) that Lθ
+DDCL decomposes
+into a sum of loss contributions ℓ(k,l)
+t
+(x≤t; θ). Let
+(x∗
+≤t∗, k∗, t∗) = argmin
+L
+X
+l=1
+ℓ(k,l)
+t
+(x≤t; θ),
+(5)
+be the indices of the summands with the smallest contribu-
+tion to the sum, for a given ﬁxed θ. This means x∗is the
+sample, k∗the time horizon, and t∗the time point associated
+with the smallest loss contribution to LDDCL. Put
+ℓ∗:=
+L
+X
+l=1
+ℓ(k∗,l)
+t
+(x≤t∗; θ).
+(6)
+Since our encoders are equipped with bias terms there
+exist constant encoders g˜θ
+enc and g˜θ
+ar (i.e., ∃˜θ, a, b∀x, z :
+g˜θ
+enc(x) = a, g˜θ
+ar(z) = b) with
+∀x, k, t :
+L
+X
+l=1
+ℓ(k,l)
+t
+(x≤t; ˜θ) = ℓ∗.
+(7)
+Then we have:
+LDDCL(θ)
+(2)= E
+" K
+X
+k=1
+T
+X
+t
+L
+X
+l=1
+ℓ(k,l)
+t
+(x≤t; θ)
+#
+(5)
+≥KT
+L
+X
+l=1
+ℓ(k∗,l)
+t
+(x∗
+≤t∗; θ)
+(6)= KTℓ∗
+(7)= E
+" K
+X
+k=1
+T
+X
+t
+L
+X
+l=1
+ℓ(k,l)
+t
+(x≤t; ˜θ)
+#
+(2)= LDDCL(˜θ),
+which was to prove.
+The above theorem shows that if LNT was trained on the
+DDCL loss only, LNT would collapse into a trivial solu-
+tion. On the other hand a constant encoder clearly does not
+optimize the maximum mutual information criterion (Oord
+et al., 2018), which is induced by the CPC objective.
+Besides this hard mathematical evidence, there are also
+other good reasons to include the CPC loss into LNT. For
+instance, it ensures that the latent representations account
+for dynamics at longer time scales. This task is carried out
+by CPC’s autoregressive module. Our hypothesis is that, for
+effective AD within time series, it is necessary to consider
+both: the local signal in a time window and the larger context
+across time windows. Otherwise the observations within a
+time window could be perfectly normal while not making
+sense in the context of a longer time horizon. For this reason,
+we believe that there are two types of semantic requirements
+of the representations and the latent views of LNT:
+• Local semantics: views should share relevant semantic
+information with the current time window. (Addressed
+by LCPC)
+• Contextualized semantics: views should reﬂect how
+the time window relates to the rest of the time series at
+different, longer time horizons. (Addressed by LDDCL)
+Both loss contributions of LNT facilitate these requirements.
+CPC contributes local latent representations and context
+representations. The semantic content of the views is man-
+aged by the DDCL loss. Especially its numerator ensures
+contextualized semantics: the views z(l)
+t
+should be close to
+different context information Wkct−k with various lags k.
+This gives the LNT architecture a lever to consider longer
+time horizons from different (non-transformed) contexts
+ct−k when deciding whether there is an anomaly at time t
+meaning that it too exhibits contextual semantic.
+5. Experiments
+For experimental evaluation of LNT in comparison to other
+methods, we study three challenging datasets. We ﬁrst de-
+scribe the datasets, baselines and implementation details.
+In Section 5.3, we present our ﬁndings: LNT outperforms
+many strong baselines in detecting anomalies in the oper-
+ation of a water distribution and a water treatment system
+and accurately ﬁnds anomalies in speech. In Section 5.4,
+we provide visualizations of the local transformations that
+are learned by LNT. Finally, in Section 5.5 we analyze
+the performance of LNT in comparison to CPC based al-
+ternatives. Our ﬁndings that LNT is consistently superior,
+complements our theoretical analysis in Section 4 on why
+CPC and transformation learning should be combined.
+Detecting Anomalies within Time Series using Local Neural Transformations
+5.1. Datasets
+We evaluate LNT on three challenging real-world datasets,
+namely the Water Distribution Dataset (WaDi) (Ahmed et al.,
+2017), the Secure Water Treatment Dataset (SWaT) (Goh
+et al., 2016) and the Libri Speech Collection (Panayotov
+et al., 2015). The ﬁrst two datasets are provided with labeled
+anomalies in the test set. As recent observations in Wu &
+Keogh (2020) show, many popular datasets for time series
+AD seem to be mislabeled and ﬂawed, which results in the
+revival of synthetic datasets (Lai et al., 2021). The Libri
+Speech data is augmented with realistic synthetic anomalies.
+Water Distribution
+The dataset is acquired from a wa-
+ter distribution testbed and provides a model of a scaled-
+down version of a large water distribution network in a
+city (Ahmed et al., 2017). The time series data is 112-
+dimensional with readings from different sensors and actua-
+tors such as pumps and valves. The training data consists
+of 14 days of normal operation sampled with a frequency
+of 1 Hz, resulting in a series length of 1048571. The test
+set consists of 2 days of additional operation (172801 time
+steps), during which 15 attacks were staged with an average
+duration of ≈12 minutes.
+Secure Water Treatment
+This dataset is from a testbed
+for water treatment (Mathur & Tippenhauer, 2016) that
+evaluates the Cyber Security of a fully functional plant with
+a six-stage process of ﬁltration and chemical dosing. Goh
+et al. (2016) collected 11 days of operation data. Under
+normal operation 51 sensor channels are recorded for 7 days
+yielding a training time series of length 475200. For the test
+data of length 224960, 36 attacks were launched during the
+last 4 days of the collection process. As suggested in Goh
+et al. (2016); Li et al. (2019), the ﬁrst 21600 samples from
+the training data are removed for training stability.
+We follow the experimental setup of He & Zhao (2019)
+and take the ﬁrst part of the collection under attack as the
+validation set and drop channels which are constant in both
+training and test set, yielding a time series of 45 dimension.
+Libri Speech
+The LibriSpeech dataset (Panayotov et al.,
+2015) is an audio collection with spoken language record-
+ings from 251 distinct speakers. We adopt the setup of Oord
+et al. (2018) with their train/test split and unsupervised train-
+ing on the raw time signal without further pre-processing.
+For AD benchmarks, we randomly place additive pure sine
+tones of varying frequency (20 - 120 Hz) and length (512
+- 4096 time steps) in the test data, yielding consecutive
+anomaly regions making up ≈10% of the test data. Speech
+data offers a challenging benchmark for deep AD methods
+since speech typically exhibits complex temporal dynam-
+ics, due to high multi-modality introduced through different
+speakers and word sequences (Oord et al., 2018).
+5.2. Baselines and Implementation Details
+Types
+SWaT
+WaDi
+Libri
+# neurons
+24
+32
+64
+# layers
+2
+2
+3
+activation
+ReLU
+ReLU
+ReLU
+bias
+False
+False
+False
+Table 1. Neural Transformation Hyperparameters
+Baselines
+We study LNT in comparison to different
+classes of AD algorithms, ranging from classical methods
+to recent advances in deep AD. They include (i) classical
+methods, such as Isolation Forests (Liu et al., 2008), PCA
+reconstruction error (Shyu et al., 2003), and Feature Bag-
+ging (Lazarevic & Kumar, 2005), (ii) auto-regressive future
+predictions with LSTM (Hundman et al., 2018) and GDN
+(Deng & Hooi, 2021), which uses a graph to model the
+relations among variables as attention for the prediction,
+(iii) methods that estimate the density of the data, such
+as KNN (Angiulli & Pizzuti, 2002), LOF (Breunig et al.,
+2000), combinations with deep auto-encoders DAGMM
+(Zong et al., 2018), (iv) methods that employ a one-class
+objective, including OC-SVM (Sch¨olkopf et al., 1999),
+DeepSVDD (Ruff et al., 2018) and THOC (Shen et al.,
+2020) for time-series, (v) methods that leverage the recon-
+struction of an auto-encoder with EncDec-AD (Malhotra
+et al., 2016) and LSTM-VAE (Park et al., 2018) (vi) and
+ﬁnally methods that use the ability of GANs to discrimi-
+nate fake examples, like BeatGAN (Zhou et al., 2019) and
+MAD-GAN (Li et al., 2019).
+Implementation Details
+For LNT, the hyperparamaters
+are adopted from those reported by Oord et al. (2018) for
+CPC: especially ct ∈R256, zt ∈R512 and K = 12 for
+experiments with LibriSpeech data. The data is processed in
+sub-sequences of length 20480 for both training and testing.
+Since the other datasets contain way less diverse data points
+and show simpler temporal dynamics, the embeddings size,
+and thus the capacity of the model, is reduced to ct ∈R32,
+zt ∈R128. Also, the time-convolutional encoder network
+is down-sized to ﬁlters (3, 3, 4, 2) and strides (3, 3, 4, 2)
+resulting in the convolution of 72 time steps.
+We consistently choose L = 12 distinct learned transfor-
+mations Tl(zt) for all datasets. Each is represented by an
+MLP with properties summarized in table 1. The ﬁnal layer
+always shares the dimensionality of zt and is applied as a
+multiplicative mask with sigmoid activation to it. Additional
+implementation details are in the appendix.
+5.3. Results
+We judge the anomaly scores predicted by the algorithms
+for each time step individually. Since the ratio of anomalies
+Detecting Anomalies within Time Series using Local Neural Transformations
+LOF
+OCSVM
+IF
+DeepSVDD
+DAGMM
+EncDec
+VAE
+MAD-GAN
+BeatGAN
+THOC
+LNT (ours)
+F1
+86.36
+75.98
+85.00
+82.82
+85.38
+75.56
+86.39
+86.89
+81.95
+88.09
+88.65
+Table 2. F1-scores (%) for the Secure Water Treatment Dataset (SWaT). Baseline results as reported in Shen et al. (2020).
+Method
+F1
+Prec
+Rec
+PCA
+0.10
+39.53
+5.63
+KNN
+0.08
+7.76
+7.75
+FB
+0.09
+8.60
+8.60
+EncDec-AD
+0.34
+34.35
+34.35
+DAGMM
+0.36
+54.44
+26.99
+LSMT-VAE
+0.25
+87.79
+14.45
+MAD-GAN
+0.37
+41.44
+33.92
+GDN
+0.57
+97.50
+40.19
+LNT (ours)
+0.39
+29.34
+60.92
+Table 3. Experimental Results on the Water Distribution Data
+(WaDi). Baseline results from Deng & Hooi (2021).
+Method
+AUC
+Prec
+Rec
+F1
+LSTM
+0.58
+15.0
+15.0
+0.15
+THOC
+0.82
+30.2
+30.0
+0.30
+LNT (ours)
+0.93
+65.0
+65.0
+0.65
+Table 4. Experimental Results on synthetic anomalies randomly
+placed in the LibriSpeech dataset.
+is imbalanced in the data, we evaluated the prediction per-
+formance with the F1 score, consistent with previous work.
+Additionally, we also report results using the ROC curve.
+The area under the curve (ROC-AUC) is a metric to judge
+the quality of the anomaly score independent of the choice
+of threshold, which is speciﬁcally chosen for its additional
+insights beyond the evaluation of a single threshold.
+The results on the SWaT and WaDi datasets can be seen in
+Tables 2 and 3, respectively. The ROC curves of our method
+on the SWaT and WaDi datasets are provided in Figures 5a
+and 5b. For SWaT, our approach (LNT) outperformed a set
+of challenging baselines as reported by Shen et al. (2020)
+with the highest F1 score (88.65%). Meanwhile for WaDi,
+our model produces comparable results both in terms of
+F1 and precision, with the highest recall value1. Notably,
+GDN achieves the highest precision on WaDi 2, but has
+a lower recall than our method. In many mission-critical
+applications, detecting as many anomalies as possible is
+often much more important, as a false negative can do more
+harm than a false positive. This makes the high recall of
+LNT (60.92%) preferable, while retaining an acceptably
+high F1 score.
+We argue that the novel criterion for AD based on con-
+trasting learned latent data transformations allows LNT to
+also uncover some of the harder detectable anomalies in the
+1In all experiments (and methods) the thresholds on the contin-
+uous anomaly score are optimized for the best F1.
+2Results reported for GDN seem to be hard to reproduce (see
+https://github.com/d-ailin/GDN/issues/9).
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+FPR
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+TPR
+LNT (AUC=0.93)
+LSTM (AUC=0.58)
+THOC (AUC=0.82)
+chance (AUC=0.50)
+Figure 3. Our approach LNT outperforms deep baselines in AD on
+speech data in terms of ROC-AUC curves.
+dataset. A similar behaviour can also be observed for the
+LibriSpeech data with results in terms of ROC curves shown
+in Figure 3. Here, LNT clearly outperforms both deep learn-
+ing methods. This shows that detecting anomalies within
+speech data with its complex temporal dynamics is indeed a
+challenging task for many deep AD algorithms. Especially
+the future predictions of LSTM perform only slightly bet-
+ter than random chance in this experiment for all possible
+thresholds. This emphasizes the beneﬁt of contrasting of
+neural transformations to uncover such hard anomalies. Ad-
+ditional metrics for this experiment are reported in Table 4.
+5.4. Visualization of Transformations
+In general, it is considered hard to get insights from em-
+bedding visualizations for zt in the latent space. Hence,
+to make the transformations interpretable in terms of se-
+mantics, we propose to visualize them in data space. We
+reuse the encoder as described in Section 3.1 and enrich it
+with a separate decoder. We train the decoder to reconstruct
+the (non-transformed) input data while freezing the encoder
+weights. The trained decoder is then applied to transformed
+embeddings to visualize them in data space.
+We chose a subset {Ti}5
+i=1 of ﬁve transformations which
+showed interpretable behavior in experiments with SWaT
+as shown in Figure 4: For the non-transformed series x the
+signal jumps in channels 25 and 36 at t ≈2500. This jump
+is delayed for channels 26 −35. Interestingly, we found
+that this delay is altered by the learned transformations. For
+example, T1 removes this delay causing the signal jump for
+all aforementioned channels at t ≈2500. In contrast, T2
+affects the series oppositely by enlarging this delay.
+In summary, these transformations produce semantically
+meaningful and diverse views of the time series. Admit-
+tedly, current interpretations are still rather high-level and
+Detecting Anomalies within Time Series using Local Neural Transformations
+0
+2500 5000
+t
+0
+10
+20
+30
+40
+channel
+x
+0
+2500 5000
+t
+1(x)
+0
+2500 5000
+t
+2(x)
+0
+2500 5000
+t
+3(x)
+0
+2500 5000
+t
+4(x)
+0
+2500 5000
+t
+5(x)
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+Figure 4. Visualizations of selected transformations in data-space that show semantically interpretable behaviour, such as altered delays in
+speciﬁc channels. Representations from SWaT dataset are decoded with a seperatly trained auto-encoder.
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+FPR
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+TPR
+LNT (AUC=0.930)
+Approx. CPC (AUC=0.801)
+CPC + OC-SVM (AUC=0.895)
+random chance (AUC=0.500)
+(a) SWaT
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+FPR
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+TPR
+LNT (AUC=0.841)
+Approx. CPC (AUC=0.802)
+CPC + OC-SVM (AUC=0.766)
+random chance (AUC=0.500)
+(b) WaDi
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+FPR
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+TPR
+LNT (AUC=0.953)
+Approx. CPC (AUC=0.783)
+CPC + OC-SVM (AUC=0.893)
+random chance (AUC=0.500)
+(c) LibriSpeech
+Figure 5. Improvement of LNT over CPC scoring evaluated for different datasets. The combination of transformation learning with local
+representation learning of CPC consitently outperforms the other variants of CPC for anomaly scoring.
+fairly limited from application standpoints. However, with-
+out domain knowledge, there exists no gold standard for a
+good transformation on the data to compare against. This
+was the original motivation for the usage of learnable trans-
+formations, as effective data augmentation for AD.
+5.5. Comparison of CPC based AD Methods
+Finally, we study the advantage of LNT over CPC. There are
+various ways to use CPC for AD. Beyond LNT, we consider
+two methods that build on CPC: (i) methods that directly use
+the CPC-loss to score anomalies (de Haan & L¨owe, 2021)
+and (ii) methods that use CPC as a feature extractor and then
+run another AD method such as OC-SVM on the extracted
+features. One disadvantage of (i) are the negative samples.
+They make it nontrivial to evaluate the CPC-loss on test
+data. We employ a practical implementation (Approx. CPC)
+without negative samples at test time. de Haan & L¨owe
+(2021) argue that taking samples from the test data is biased
+and using the training data is infeasible in practice.
+In contrast, DDCL is deterministic and the alternative views
+are all constructed from a single sample. It is hence straight-
+forward to use it to score anomalies at test time. From the
+results in Figure 5, we found that the combination of trans-
+formation learning with local representation learning of CPC
+consistently outperforms the considered variants of CPC for
+AD in all three datasets. This connects to the discussion
+about contextualized semantics in Section 4. Comparing
+LNT with CPC + OC-SVM supports our claim: While the
+OC-SVM with CPC input features has access only to the
+local semantics in the CPC representations, the performance
+of LNT in Figure 5 is consistently superior and can be ex-
+plained by its transformations exhibiting both contextualized
+semantics and diversity.
+6. Conclusion
+We propose a novel self-supervised method, LNT, to detect
+anomalies within time series. The key ingredient is a novel
+training objective combining representation and transfor-
+mation learning. We prove that both learning paradigms
+complement each other to avoid trivial solutions not appro-
+priate for AD. We ﬁnd in an empirical study that LNT learns
+to insert delays, which allows it to outperform many strong
+baselines on challenging detection tasks.
+Detecting Anomalies within Time Series using Local Neural Transformations
+Acknowledgements
+Marius Kloft acknowledges support by the Carl-Zeiss Foun-
+dation, the DFG awards KL 2698/2-1 and KL 2698/5-
+1, and the BMBF awards 01|S18051A, 03|B0770E, and
+01|S21010C.
+Work by Decky Aspandi Latif and Steffen Staab has been
+partially funded by BMBF in the research project “XAPS -
+eXplainable AI for Automated Production System”.
+Stephan Mandt acknowledges support by DARPA under
+contract No. HR001120C0021, the Department of Energy
+under grant DE-SC0022331, the National Science Founda-
+tion under the NSF CAREER award 2047418 and Grants
+1928718, 2003237 and 2007719, as well as gifts from Intel,
+Disney, and Qualcomm. Any opinions, ﬁndings and con-
+clusions or recommendations expressed in this material are
+those of the authors and do not necessarily reﬂect the views
+of DARPA or NSF.
+The Bosch Group is carbon neutral. Administration, manu-
+facturing and research activities do no longer leave a carbon
+footprint. This also includes GPU clusters on which the
+experiments have been performed.
+References
+Ahmed, C. M., Palleti, V. R., and Mathur, A. P. Wadi: a
+water distribution testbed for research in the design of
+secure cyber physical systems. In Proceedings of the 3rd
+International Workshop on Cyber-Physical Systems for
+Smart Water Networks, pp. 25–28, 2017.
+Angiulli, F. and Pizzuti, C. Fast outlier detection in high
+dimensional spaces. In European conference on princi-
+ples of data mining and knowledge discovery, pp. 15–27.
+Springer, 2002.
+Audibert, J., Michiardi, P., Guyard, F., Marti, S., and Zu-
+luaga, M. A. Usad: Unsupervised anomaly detection
+on multivariate time series. In Proceedings of the 26th
+ACM SIGKDD International Conference on Knowledge
+Discovery & Data Mining, pp. 3395–3404, 2020. doi:
+10.1145/3394486.3403392.
+Bergman, L. and Hoshen, Y.
+Classiﬁcation-based
+anomaly detection for general data.
+arXiv preprint
+arXiv:2005.02359, 2020.
+Breunig, M. M., Kriegel, H.-P., Ng, R. T., and Sander, J. Lof:
+identifying density-based local outliers. In Proceedings
+of the 2000 ACM SIGMOD international conference on
+Management of data, pp. 93–104, 2000.
+Carmona, C. U., Aubet, F.-X., Flunkert, V., and Gasthaus,
+J. Neural contextual anomaly detection for time series.
+arXiv preprint arXiv:2107.07702, 2021.
+de Haan, P. and L¨owe, S. Contrastive predictive coding
+for anomaly detection. arXiv preprint arXiv:2107.07820,
+2021.
+Deng, A. and Hooi, B. Graph neural network-based anomaly
+detection in multivariate time series. In Proceedings of the
+AAAI Conference on Artiﬁcial Intelligence, volume 35,
+pp. 4027–4035, 2021.
+Filonov, P., Lavrentyev, A., and Vorontsov, A. Multivari-
+ate industrial time series with cyber-attack simulation:
+Fault detection using an lstm-based predictive data model.
+arXiv preprint arXiv:1612.06676, 2016.
+Geiger, A., Liu, D., Alnegheimish, S., Cuesta-Infante, A.,
+and Veeramachaneni, K. Tadgan: Time series anomaly
+detection using generative adversarial networks. In 2020
+IEEE International Conference on Big Data (Big Data),
+pp. 33–43. IEEE, 2020. doi: 10.1109/BigData50022.
+2020.9378139.
+Gidaris, S., Singh, P., and Komodakis, N. Unsupervised rep-
+resentation learning by predicting image rotations. arXiv
+preprint arXiv:1803.07728, 2018.
+Goh, J., Adepu, S., Junejo, K. N., and Mathur, A. A dataset
+to support research in the design of secure water treat-
+ment systems. In International conference on critical
+information infrastructures security, pp. 88–99. Springer,
+2016.
+Golan, I. and El-Yaniv, R. Deep anomaly detection us-
+ing geometric transformations. In Advances in Neural
+Information Processing Systems, pp. 9758–9769, 2018.
+Goodfellow, I., Pouget-Abadie, J., Mirza, M., Xu, B.,
+Warde-Farley, D., Ozair, S., Courville, A., and Bengio, Y.
+Generative adversarial nets. Advances in neural informa-
+tion processing systems, 27, 2014.
+Guo, Y., Liao, W., Wang, Q., Yu, L., Ji, T., and Li, P. Multi-
+dimensional time series anomaly detection: A gru-based
+gaussian mixture variational autoencoder approach. In
+Asian Conference on Machine Learning, pp. 97–112.
+PMLR, 2018.
+URL http://proceedings.mlr.
+press/v95/guo18a.html.
+Gutmann, M. U. and Hyv¨arinen, A. Noise-contrastive es-
+timation of unnormalized statistical models, with appli-
+cations to natural image statistics. Journal of Machine
+Learning Research, 13(2), 2012.
+He, Y. and Zhao, J. Temporal convolutional networks for
+anomaly detection in time series. In Journal of Physics:
+Conference Series, volume 1213, pp. 042050. IOP Pub-
+lishing, 2019. doi: 10.1088/1742-6596/1213/4/042050.
+Detecting Anomalies within Time Series using Local Neural Transformations
+Hendrycks, D., Mazeika, M., Kadavath, S., and Song, D.
+Using self-supervised learning can improve model robust-
+ness and uncertainty. In Advances in Neural Information
+Processing Systems, pp. 15663–15674, 2019.
+Hundman, K., Constantinou, V., Laporte, C., Colwell, I.,
+and Soderstrom, T. Detecting spacecraft anomalies us-
+ing lstms and nonparametric dynamic thresholding. In
+Proceedings of the 24th ACM SIGKDD international con-
+ference on knowledge discovery & data mining, pp. 387–
+395, 2018.
+Kingma, D. P. and Welling, M.
+Auto-encoding vari-
+ational bayes.
+In Bengio, Y. and LeCun, Y. (eds.),
+2nd International Conference on Learning Representa-
+tions, ICLR 2014, Conference Track Proceedings, Banff,
+AB, Canada, 2014. URL http://arxiv.org/abs/
+1312.6114.
+Lai, K.-H., Zha, D., Xu, J., Zhao, Y., Wang, G., and Hu, X.
+Revisiting time series outlier detection: Deﬁnitions and
+benchmarks. 2021.
+Lazarevic, A. and Kumar, V. Feature bagging for outlier
+detection. In Proceedings of the eleventh ACM SIGKDD
+international conference on Knowledge discovery in data
+mining, pp. 157–166, 2005.
+Li, D., Chen, D., Jin, B., Shi, L., Goh, J., and Ng, S.-
+K. Mad-gan: Multivariate anomaly detection for time
+series data with generative adversarial networks. In In-
+ternational Conference on Artiﬁcial Neural Networks, pp.
+703–716. Springer, 2019. doi: 10.1016/j.neucom.2020.10.
+084. URL https://www.sciencedirect.com/
+science/article/pii/S0925231220316970.
+Liang, H., Song, L., Wang, J., Guo, L., Li, X., and Liang,
+J. Robust unsupervised anomaly detection via multi-time
+scale dcgans with forgetting mechanism for industrial
+multivariate time series. Neurocomputing, 423:444–462,
+2021. doi: 10.1016/j.neucom.2020.10.084.
+Liu, F. T., Ting, K. M., and Zhou, Z.-H. Isolation forest. In
+2008 eighth ieee international conference on data mining,
+pp. 413–422. IEEE, 2008.
+Malhotra, P., Vig, L., Shroff, G., and Agarwal, P. Long
+short term memory networks for anomaly detection in
+time series. In Proceedings, volume 89, pp. 89–94, 2015.
+Malhotra, P., Ramakrishnan, A., Anand, G., Vig, L., Agar-
+wal, P., and Shroff, G.
+Lstm-based encoder-decoder
+for multi-sensor anomaly detection.
+arXiv preprint
+arXiv:1607.00148, 2016.
+Mathur, A. P. and Tippenhauer, N. O. Swat: A water treat-
+ment testbed for research and training on ics security. In
+2016 international workshop on cyber-physical systems
+for smart water networks (CySWater), pp. 31–36. IEEE,
+2016.
+Munir, M., Siddiqui, S. A., Dengel, A., and Ahmed, S.
+Deepant: A deep learning approach for unsupervised
+anomaly detection in time series. IEEE Access, 7:1991–
+2005, 2019. doi: 10.1109/ACCESS.2018.2886457.
+Nalisnick, E., Matsukawa, A., Teh, Y. W., Gorur, D., and
+Lakshminarayanan, B. Do deep generative models know
+what they don’t know? In International Conference on
+Learning Representations, 2018.
+Niu, Z., Yu, K., and Wu, X. Lstm-based vae-gan for time-
+series anomaly detection. Sensors, 20(13):3738, 2020.
+URL https://www.mdpi.com/1424-8220/20/
+13/3738.
+Oord, A. v. d., Li, Y., and Vinyals, O. Representation learn-
+ing with contrastive predictive coding. arXiv preprint
+arXiv:1807.03748, 2018.
+Panayotov, V., Chen, G., Povey, D., and Khudanpur, S.
+Librispeech: an asr corpus based on public domain au-
+dio books. In 2015 IEEE international conference on
+acoustics, speech and signal processing (ICASSP), pp.
+5206–5210. IEEE, 2015.
+Park, D., Hoshi, Y., and Kemp, C. C. A multimodal anomaly
+detector for robot-assisted feeding using an lstm-based
+variational autoencoder. IEEE Robotics and Automation
+Letters, 3(3):1544–1551, 2018.
+Pereira, J. and Silveira, M. Unsupervised anomaly detec-
+tion in energy time series data using variational recur-
+rent autoencoders with attention. In 2018 17th IEEE
+international conference on machine learning and ap-
+plications (ICMLA), pp. 1275–1282. IEEE, 2018. doi:
+10.1109/ICMLA.2018.00207.
+Qiu, C., Pfrommer, T., Kloft, M., Mandt, S., and Rudolph,
+M. Neural transformation learning for deep anomaly
+detection beyond images. In International Conference on
+Machine Learning, pp. 8703–8714. PMLR, 2021.
+Rudolph, M., Ruiz, F., Athey, S., and Blei, D. Structured em-
+bedding models for grouped data. In Neural Information
+Processing Systems, 2017.
+Ruff, L., Vandermeulen, R., Goernitz, N., Deecke, L., Sid-
+diqui, S. A., Binder, A., M¨uller, E., and Kloft, M. Deep
+one-class classiﬁcation. In International conference on
+machine learning, pp. 4393–4402, 2018.
+Ruff, L., Kauffmann, J. R., Vandermeulen, R. A., Montavon,
+G., Samek, W., Kloft, M., Dietterich, T. G., and M¨uller,
+K.-R. A unifying review of deep and shallow anomaly
+detection. arXiv preprint arXiv:2009.11732, 2020.
+Detecting Anomalies within Time Series using Local Neural Transformations
+Sch¨olkopf, B., Williamson, R. C., Smola, A. J., Shawe-
+Taylor, J., Platt, J. C., et al. Support vector method for
+novelty detection. In NIPS, volume 12, pp. 582–588.
+Citeseer, 1999.
+Shen, L., Li, Z., and Kwok, J.
+Timeseries anomaly
+detection using temporal hierarchical one-class net-
+work. In Advances in Neural Information Processing
+Systems, 2020.
+URL https://proceedings.
+neurips.cc/paper/2020/file/
+97e401a02082021fd24957f852e0e475-Paper.
+pdf.
+Shyu, M.-L., Chen, S.-C., Sarinnapakorn, K., and Chang,
+L. A novel anomaly detection scheme based on principal
+component classiﬁer. Technical report, MIAMI UNIV
+CORAL GABLES FL DEPT OF ELECTRICAL AND
+COMPUTER ENGINEERING, 2003.
+S¨olch, M., Bayer, J., Ludersdorfer, M., and van der Smagt,
+P. Variational inference for on-line anomaly detection in
+high-dimensional time series. arXiv preprint, 2016.
+Su, Y., Zhao, Y., Niu, C., Liu, R., Sun, W., and Pei, D.
+Robust anomaly detection for multivariate time series
+through stochastic recurrent neural network. In Proceed-
+ings of the 25th ACM SIGKDD International Conference
+on Knowledge Discovery & Data Mining, pp. 2828–2837,
+2019. doi: 10.1145/3292500.3330672.
+Tamkin, A., Wu, M., and Goodman, N. Viewmaker net-
+works: Learning views for unsupervised representation
+learning. arXiv preprint arXiv:2010.07432, 2020.
+Thill, M., Konen, W., and B¨ack, T. Time series encodings
+with temporal convolutional networks. In International
+Conference on Bioinspired Methods and Their Applica-
+tions, pp. 161–173. Springer, 2020. ISBN 978-3-030-
+63710-1. doi: 10.1007/978-3-030-63710-1 13.
+Tschannen, M., Djolonga, J., Rubenstein, P. K., Gelly, S.,
+and Lucic, M. On mutual information maximization for
+representation learning. arXiv preprint arXiv:1907.13625,
+2019.
+Wang, S., Zeng, Y., Liu, X., Zhu, E., Yin, J., Xu, C., and
+Kloft, M. Effective end-to-end unsupervised outlier de-
+tection via inlier priority of discriminative network. In
+Advances in Neural Information Processing Systems, pp.
+5962–5975, 2019.
+Wu, R. and Keogh, E. J. Current time series anomaly detec-
+tion benchmarks are ﬂawed and are creating the illusion
+of progress. arXiv preprint arXiv:2009.13807, 2020.
+Zhang, C., Song, D., Chen, Y., Feng, X., Lumezanu, C.,
+Cheng, W., Ni, J., Zong, B., Chen, H., and Chawla, N. V.
+A deep neural network for unsupervised anomaly de-
+tection and diagnosis in multivariate time series data.
+In Proceedings of the AAAI Conference on Artiﬁcial
+Intelligence, volume 33, pp. 1409–1416, 2019.
+doi:
+10.1609/aaai.v33i01.33011409.
+Zhao, H., Wang, Y., Duan, J., Huang, C., Cao, D., Tong,
+Y., Xu, B., Bai, J., Tong, J., and Zhang, Q. Multivari-
+ate time-series anomaly detection via graph attention
+network. In 2020 IEEE International Conference on
+Data Mining (ICDM), pp. 841–850. IEEE, 2020. doi:
+10.1109/ICDM50108.2020.00093.
+Zhou, B., Liu, S., Hooi, B., Cheng, X., and Ye, J. Beat-
+gan: Anomalous rhythm detection using adversarially
+generated time series. In IJCAI, pp. 4433–4439, 2019.
+Zong, B., Song, Q., Min, M. R., Cheng, W., Lumezanu,
+C., Cho, D., and Chen, H. Deep autoencoding gaus-
+sian mixture model for unsupervised anomaly detection.
+In International conference on learning representations,
+2018.
+Detecting Anomalies within Time Series using Local Neural Transformations
+A. Further Implementation Details
+In this section the implementation details for the experi-
+ments conducted in the main paper are further elaborated.
+These include our method (LNT) as well as all baselines
+that we implemented for comparision.
+A.1. Hardware
+All experiments were run on virtualized hardware with 8
+CPU cores of type Intel(R) Xeon(R) Gold 6150 running at
+2.70 GHz, 32 GB RAM, and a single TeslaV100-SXM2 with
+32 GB of gpu memory. Consistently we use Python 3.9,
+PyTorch in version 1.8.1 with CUDA in version 11.1 and
+cuDNN in version 8.0.5.
+A.2. Hyperparameters
+LNT
+The hyper-parameters for our method were deter-
+mined by the following procedure. Starting with the hyper-
+paramters as reported in Oord et al. (2018), the sizes of the
+embeddings zt and ct, which also determines the number of
+memory units in the recurrent part gar, and the number of
+parameters in the convolutional encoder genc are downsized
+to ﬁt the complexity and amount of data in the other datasets.
+To ﬁnd a well generalizing setup, a hold-out validation set
+(split from the training data) was used. For Libri-Speech
+we considered the hyper-parameters as optimal and didn’t
+change them. As a rule of thump, the sequence length for
+training and the width of the strided temporal convolutions
+were always chosen in a way such that the number of recur-
+rent steps gar takes matches with the setup (= 128) in Oord
+et al. (2018).
+LNT is trained for 100 epochs, respectively 500 epochs on
+SWaT and WaDi, with learning rate 2 · 10−4, batch size 32
+and λ = 10−3.
+A.3. Baselines in LibriSpeech Experiments
+The following hyperparameter setups are used for the exper-
+iments conducted with synthetic anomalies in LibriSpeech
+data.
+LSTM
+Here, a standard Long Short Term Memory
+(LSTM) network with 2 layers and 256 hidden units each
+was chosen. With this setup the number of hidden units
+aligns with the LNT setup and the multiple layers should
+account for the missing encoder structure in LSTM. It is
+trained until convergence, which took approximately 100
+epochs, with batch size 32, learning rate 2 · 10−4 and a
+dropout of 0.3.
+THOC
+Here, the Implementation was kindly provided
+by the authors. We used a smaller sub-sequence length of
+1024 for training due to the high memory load of the model.
+Predictions at test time are stitched together to align with
+the longer sequence length. The method is trained to ﬁt 3
+layers hierarchical with dilations (1, 2, 4), 128 hidden units
+and 6 clusters in each layer. The method is trained with
+learning rate 10−3 and batch size 32 and converged after 50
+epochs.
+B. Design Choices for Model Evaluation
+The following notes should brieﬂy justify the design choices
+made for the empirical evaluation of the model in the main
+paper:
+• Question: Why is there a different set of methods for
+each of the dataset?
+Answer: The different baseline sets stem from the dif-
+ferent lines of work with reported results (Shen et al.,
+2020; Li et al., 2019). Especially, Shen et al. (2020)
+is chosen for its variety of different baselines and its
+clear experimental setup provided with their code. Un-
+fortunately only Deng & Hooi (2021) evaluates on the
+WaDi dataset with the experimental details provided in
+Li et al. (2019).
+• Question: Why are there different evaluation metrics?
+Answer: We choose the Receiver Operating Charac-
+teristic (ROC) for its additional insights it provides,
+beyond the performance of a single threshold.
+In
+anomaly detection setups simply optimizing for the
+best F1 score might not be sufﬁcient. Since a low
+recall could mean that some anomalies, intrusions or
+attacks are missed - one often strives for a good F1
+above a given recall rate. Since this can be highly ap-
+plication dependent, a good anomaly detector should
+output a well calibrated anomaly scores that works for
+different choices of threshold. This is measured by
+ROC. Since previous work reports F1 scores only, we
+adopted this for tabular results.
+• Question: How come GDN has such a high precision
+on WaDi?
+Answer: Deng & Hooi (2021) have shown that graph
+that model relationship among sensors are a strong rep-
+resentation of the local behaviour in a time series (out-
+performing the dense vector representations in LNT
+that originate from CPC as a time series representa-
+tion learner.) This yields a very high precision in the
+anomaly detection task by predicting the next time step
+give the graph about short term history. But Graph
+Deviation Network (GDN) learns these graphs locally
+on a sliding window and thus no broader context (slow
+features) is included. This might explain the lower re-
+call of the method, if some context-dependent anoma-
+lies are missed. We hypothesize that more context-
+depended outliers can be detected, yielding a higher
+Detecting Anomalies within Time Series using Local Neural Transformations
+recall, if local transformations that account for contex-
+tualized semantics are applied to the learned graphs,
+outputting latent graph views that can be contrast. Fu-
+ture work may may especially consider such an ap-
+proach, unifying the best of both approaches.
+Additionally the results reported by Deng & Hooi
+(2021) seem to be hard to reproduce (please see the
+discussion linked in the main text for details).

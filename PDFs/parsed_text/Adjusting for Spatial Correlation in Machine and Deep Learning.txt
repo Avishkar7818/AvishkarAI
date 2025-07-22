@@ -1,0 +1,682 @@
+Adjusting for Spatial Correlation in Machine and Deep Learning
+Matthew J. Heaton
+mheaton@stat.byu.edu
+Department of Statistics
+Brigham Young University
+Provo, UT 84602, USA
+Andrew Millane
+amillane@student.byu.edu
+Department of Statistics
+Brigham Young University
+Provo, UT 84602, USA
+Jake S. Rhodes
+rhodes@stat.byu.edu
+Department of Statistics
+Brigham Young University
+Provo, UT 84602, USA
+October 8, 2024
+Abstract
+Spatial data display correlation between observations collected at neighboring locations.
+Generally, machine and deep learning methods either do not account for this correlation or do
+so indirectly through correlated features and thereby forfeit predictive accuracy. To remedy this
+shortcoming, we propose preprocessing the data using a spatial decorrelation transform derived
+from properties of a multivariate Gaussian distribution and Vecchia approximations. The trans-
+formed data can then be ported into a machine or deep learning tool. After model fitting on
+the transformed data, the output can be spatially re-correlated via the corresponding inverse
+transformation. We show that including this spatial adjustment results in higher predictive
+accuracy on simulated and real spatial datasets.
+Keywords: Gaussian process, Transformation, Predictive accuracy, Machine Learning.
+1
+Research Synopsis and Goals
+“Spatial data,” broadly speaking, is any data that contains geographic or location-based information
+about the observations. Spatial data are found in nearly every scientific field from ecology (Plant,
+1
+arXiv:2410.04312v1  [stat.ME]  5 Oct 2024
+2018) to environmental science, (Harris and Jarvis, 2014; Yuan et al., 2020), public health (Waller
+and Gotway, 2004; Shaddick and Zidek, 2015), real estate (Pace et al., 1998; Arbia et al., 2021),
+civil engineering (Ziakopoulos and Yannis, 2020) and beyond. As a result, appropriate analysis of
+spatial data sets of increasing size and scope can transform a wide range of scientific disciplines.
+The primary challenge of appropriately predicting spatial data lies in the inherent correlation
+arising between observations due to the geographic nature of the collected data.
+The field of
+spatial statistics is concerned with the development of such methods (Stein and Gelfand, 2022).
+The Gaussian process (GP) stands firmly at the forefront (Gelfand and Schliep, 2016) of spatial
+methodology because it directly accounts for the spatial correlation in the data. While the flexibility
+of GPs allows them to be applied to many spatial problems, their lack of scalability to large datasets
+is an issue for modern spatial applications (Bradley et al., 2016; Heaton et al., 2019; Huang et al.,
+2021). Specifically, factorization of the covariance matrix is O(n3) complexity. Further, the GP
+typically relies on oversimplifying assumptions such as stationarity or linearity (Banerjee et al.,
+2014) which may not hold in the data.
+Because of their ability to capture non-linear relationships and computational scalability, recent
+attention has shifted to machine and deep learning (ML and DL) approaches for predicting with
+spatial data. Recent spatial ML and DL approaches to spatial prediction and modeling include
+random forests (Nikparvar and Thill, 2021; Patelli et al., 2023), fully connected neural networks
+(Wikle and Zammit-Mangion, 2023), compositional neural networks (Zammit-Mangion et al., 2022),
+graph neural networks (Sainsbury-Dale et al., 2023; Cisneros et al., 2024; Tonks et al., 2024) or
+even deep Gaussian processes (Vu et al., 2022; Sauer et al., 2023). Many of these implementation of
+ML or DL to spatial data involve engineering spatial features as inputs into the model architecture
+(Patelli et al., 2023). For example, Sekuli´c et al. (2020) and Georganos et al. (2021) use spatial
+coordinates and spatial neighbors as inputs to ML algorithms. Gray et al. (2022), Lin et al. (2023)
+and Chen et al. (2024) use spatial basis functions (see Bradley et al., 2011) as features in fully
+connected neural network models in a method they term “deep kriging.” Zammit-Mangion et al.
+(2024) take this idea one step further allowing weights and biases of neural networks to vary over
+space.
+and use graphical neural networks to perform kriging.
+The issue with these many of these ML and DL approaches lies in their assumption that the
+inclusion of spatial features allows the model to adequately capture the spatial structure present
+in the data so that observations can be treated as independent in the loss function. That is, each
+of these approaches typically relies on loss functions that are independent summations across the
+2
+observations (i.e. Pn
+i=1(yi −byi)2). However, work by Stein (2014) showed that spatial inputs likely
+oversmooth the data leading to residual spatial correlation. To this end, Saha et al. (2023) and
+Zhan and Datta (2023) build ML and DL models which directly incorporate spatial correlation from
+the observations into the loss function by using a generalized squared error loss during the model
+training. Using these generalized loss functions, however, can come at the cost of computational
+complexity unless special care is taken in their implementation via either computationally simpli-
+fying assumptions (e.g. Vecchia approximations, Katzfuss and Guinness 2021) or supercomputing
+(Abdulah et al., 2018)
+The primary contribution of this research is to propose the use of a spatially decorrelating
+transformation as a preprocessing step when fitting ML and DL models on spatial data. Using
+the form of the conditional distribution of a multivariate Gaussian distribution, our proposed
+transformation decorrelates the data by subtracting off the effect of spatial neighbors weighted by
+a parametric correlation function. After applying this preprocessing step, the resulting decorrelated,
+transformed data can be input into the desired ML or DL model and trained with any standard
+loss functions rather than more computationally intensive generalized loss functions. The output
+of a given trained ML or DL model can then be back-transformed to be spatially correlated by
+inverting the decorrelating transformation. Importantly, our proposed decorrelation transform is
+computationally scalable because it relies only on nearest neighbor information so as to keep the
+rank of covariance matrices small and hence, applicable to big spatial data.
+Section 2 motivates the decorrelating transformation from properties of multivariate Gaussian
+distributions and Vecchia approximations. Section 3 demonstrates the decorrelation method and
+compares its performance to other spatial and non-spatial (baseline) methods. Section 4 applies
+our decorrelation approach on a real data set of particulate matter content across the contiguous
+United States. Finally, Section 5 concludes and discusses areas of future research.
+2
+Methodology
+2.1
+Background
+Let Y = (Y (ℓ1), . . . , Y (ℓn))′ be a response variable measured at the locations ℓ1, . . . , ℓn where
+ℓi ∈D ⊂Rd and D is the spatial domain and d is an integer (typically, d = 2 in spatial statistics
+such that ℓi = (ℓi1, ℓi2) would correspond to longitude and latitude coordinates).
+Further let
+x(ℓ) = (x0(ℓ), . . . , xP (ℓ))′ be a vector of features (covariates) where we assume that x0(ℓ) ≡1 is
+3
+an intercept term (also commonly referred to as a bias term). As motivation for our methods, we
+assume Y (ℓ) follows a GP with linear mean µ(ℓ) = x′(ℓ)β where β = (β0, . . . , βP )′ is a vector of
+coefficients such that
+Y ∼Nn(Xβ, σ2R)
+(1)
+where Nn is the n−dimensional Gaussian distribution, X is the n × (P + 1) design matrix of
+features (with a leading column of 1’s), σ2 is a common variance (also referred to as the sill in
+spatial statistics terminology) and R = {ρij} is the n×n spatial correlation matrix. For exposition
+(although not necessary for our proposed methods), we assume a stationary correlation (kernel)
+function such that
+ρij =
+
+
+
+
+
+1
+if i = j
+(1 −ω)ρ(∥ℓi −ℓj∥| ϕ)
+if i ̸= j
+(2)
+where ω ∈[0, 1] is a nugget term (see Banerjee et al., 2014, Chapter 2 for details) and ρ(d | ϕ) is a
+stationary correlation function governed by parameters ϕ (e.g. range and smoothness parameters).
+The factorization of the n×n matrix R, where n is the number of observations, makes model (1)
+computationally infeasible for even moderately sized data sets. To develop a more computationally
+feasible approach for spatial data that can subsequently be extended to machine and deep learning
+models, recall that any multivariate probability density function (PDF) can be factored as a series
+of univariate conditional distributions. In our consideration, the multivariate Gaussian distribution
+in (1) can be equivalently factored as a series of univariate Gaussian conditional distributions such
+that,
+Nn(Y | Xβ, σ2R) ≡N1(Y (ℓ1) | µ1, σ2)
+n
+Y
+i=2
+N1(Y (ℓi) | µi, σ2vi)
+(3)
+where N1(y | m, v) is the univariate Gaussian distribution for y with mean m and variance v.
+While not explicitly shown in (3), the distributions in the product are conditional distributions
+on previous data points {Y (ℓ1), . . . , Y (ℓi−1)} through the mean and variance terms which are,
+4
+according to properties of the multivariate normal distribution,
+µi =
+
+
+
+
+
+x′(s1)β
+if i = 1
+x′(si)β + R(i, Li)R−1(Li, Li)(YLi −XLiβ)
+if i > 1
+(4)
+vi =
+
+
+
+
+
+1
+if i = 1
+1 −R(i, Li)R−1(Li, Li)R(Li, i)
+if i > 1
+(5)
+where Li = {1, . . . , i−1} is the set of indices of preceding points, YA is the set of Y (s) corresponding
+to indices in the A, XA are the rows of X corresponding to A and R(A, B) is the submatrix of R
+with rows indexed in A and columns in B.
+Importantly, the factorization in (3) is still computationally demanding because the forms for
+µi and vi in (4) and (5) require dealing with large matrices through R(Li, Li) because the cardi-
+nality of Li grows as i →n. Hence, for computational feasibility, we adopt the Vecchia process
+approximation framework (see Datta et al., 2016a,b; Katzfuss and Guinness, 2021) by replacing Li
+with a conditioning set Ci which we define to be the set of the at most C nearest neighbors of ℓi in
+terms of Euclidean distance. In this way, the cardinality of Ci is at most C so that R(Ci, Ci) is also
+at most C × C and can be dealt with computationally. This Vecchia approximation relies on the
+assumption that all the information about Y (ℓi) in the conditional distribution Ni(Y (ℓi) | µi, σ2vi)
+can be adequately summarized by the C nearest neighbors to Y (si) among Y (ℓ1), . . . , Y (ℓi−1).
+In using the Vecchia approximation, we have to consider (i) the choice of C and (ii) the ordering
+of the observations. Early investigations into Vecchia approximations by Datta et al. (2016a) found
+that C ≈20 was typically sufficient for isotropic spatial processes. Subsequent research by Katzfuss
+and Guinness (2021) showed that often C ≈10 was still sufficient. In early stages of this research,
+we found that C > 20 generally captured the spatial correlation. Hence, here, we use C = 30 as
+this goes beyond these guidelines while maintaining computational efficiency. In regards to the
+ordering, we note that Katzfuss and Guinness (2021) discuss the impact of observation ordering
+on this Vecchia assumption and recommend certain orderings of the observations to obtain better
+approximations. For purposes of this research, follow their max-min suggested ordering.
+5
+2.2
+Proposed Spatial Adjustment
+Under the factorization in (3), consider the transformation
+eY (ℓi) =
+
+
+
+
+
+Y (ℓi)
+if i = 1
+v−1/2
+i
+ Y (ℓi) −R(i, Ci)R−1(Ci, Ci)YCi
+
+if i > 1.
+(6)
+Under this transformation, if Y (ℓi) is Gaussian, eY (ℓi) will also be Gaussian with expectation
+E(eY (ℓi) | YLi) = ex′
+i(ℓi)β
+(7)
+where
+ex′(ℓi) =
+
+
+
+
+
+x′(ℓi)
+if i = 1
+v−1/2
+i
+ x′(ℓi) −R(i, Ci)R−1(Ci, Ci)XCi
+
+if i > 1.
+(8)
+and variance σ2. Specifically, under (6), eY (ℓi) ind
+∼N(exi(ℓi)β, σ2) or, equivalently, eY ∼N(f
+Xβ, σ2I)
+where eY = (eY (ℓ1), . . . , eY (ℓn))′ and I is an identity matrix. Notably, (6) under a Gaussian assump-
+tion, is a spatial decorrelating transformation.
+Given the above properties, we propose using (6) and (8) as a decorrelating transform that can
+be done as a pre-processing step prior to machine and deep learning model fitting. Importantly,
+while the transformation is motivated by properties of a multivariate Gaussian distribution, in ML
+and DL approaches we do not generally assume that Y follows a Gaussian distribution. Rather,
+we are simply applying (6) to spatial data in an effort to reduce the impact of spatial correlation
+on model training.
+Note the following key impacts of the transformation of Y (ℓi) to eY (ℓi) via (6) on ML or DL
+approaches. First, because (6) theoretically removes the effect of the neighboring observations YCi
+on Y (ℓi), methods that resample the data (such as random forests) or use minibatching (such as
+neural networks) can be applied directly without regard to the spatial structure. When correlated,
+subsets of Y cannot be considered because of the spatial correlation affecting the entire vector (see
+Saha et al., 2023). However, subsets or bootstrap samples of eY can be considered without regard
+for the spatial structure due to independence.
+Second, the transformed matrix of feature variables (inputs) f
+X forms a linear basis for eY if the
+6
+data are Gaussian. Hence, when using this transformation to move beyond linearity in ML and DL
+approaches, we propose using ex(ℓ) from (8) as the appropriate input features into the ML and DL
+function rather than the original x(ℓ). Importantly, because the untransformed x(ℓi) includes an
+intercept term (i.e. x0(ℓ) ≡1), after the transformation in (8), ex(ℓ) includes a transformed intercept
+term. This transformed intercept term is important because, the conditioning set indexed by Ci
+varies with observation with the first observation being a marginal distribution as per Equation
+(3). Keeping the intercept term in the transformation of x(ℓi) to ex(ℓi) accounts for this variability
+in the conditioning set and is needed for our approach in spite of intercepts not being traditionally
+included as features in machine or deep learning models.
+Third, by scaling by v−1/2
+i
+all the eY (ℓi) have a common variance σ2. Under a common variance,
+common loss functions such as squared error loss are appropriate (rather than, e.g., weighted least
+squares). Hence, any machine or deep learning model can be fit in the standard way according to
+any chosen loss function.
+After training the machine learning model on the transformed data {eY (ℓi), ex(ℓi)}n
+i=1, predic-
+tions for a new response, Y (u), at an unobserved location u ∈D is obtained as follows. First,
+let Cu ⊂{1, . . . , n} denote the set of C nearest neighbors to u from among the training set loca-
+tions ℓ1, . . . , ℓn. Given Cu, define ex(u) as in (8) then input ex(u) into the fitted machine learning
+model to get a prediction eY ⋆(u) = bf(ex(u)). We can then back transform the prediction eY ⋆(u)
+to a prediction for Y (u) (i.e., recorrelate the prediction with its spatial neighbors) via the inverse
+transformation
+Y ⋆(u) = v1/2 eY ⋆(u) + R(u, Cu)R−1(Cu, Cu)YCu
+(9)
+where we use the notation R(u, Nu) to denote Corr(Y (u), YNu) under the correlation function in
+(2).
+In brief, our proposed method is as follows. First, inputs and outputs are transformed according
+to (6) and (8). Second, the machine or deep learning model of choice is fit to the transformed data
+{(eY (ℓi), ex(ℓi))}n
+i=1. Third, the model predicts the transformed eY ⋆(u) = bf(ex(u)) and the output is
+backtransformed via (9). This algorithm is detailed as Algorithm 1.
+7
+Algorithm 1 Spatial Adjustment for Machine and Deep Learning
+1: Choose spatial tuning parameters ω ∈[0, 1] and ϕ as well as machine-specific tuning parameters
+θ.
+2: Order observations according to the max-min criterion of Katzfuss and Guinness (2021).
+3: Determine nearest neighbor sets Li for i = 1, . . . , n.
+4: Transform Y (ℓi) to eY (ℓi) via (6).
+5: Transform x(ℓi) to ex(ℓi) via (8).
+6: Fit machine or deep learning model bf(ex(ℓ)) to transformed data {(eY (ℓi), ex(ℓi))}.
+7: for each prediction location u ∈D do
+8:
+Determine nearest neighbor set of u (Lu) among training locations {ℓ1, . . . , ℓn}
+9:
+Transform x(u) to ex(u) via (8)
+10:
+Obtain a prediction eY ⋆(u) = bf(ex(u)).
+11:
+Back transform prediction eY ⋆(u) to original scale prediction Y ⋆(u) according to (9).
+12:
+Output prediction Y ⋆(u).
+13: end for
+2.3
+Notes on Implementation
+The above adjustment for spatial correlation in the data are general and allows the user to fit any
+machine or deep learning model of choice. However, there are a few details that are important to
+consider in the implementation which we briefly discuss here. First, our proposed spatial adjustment
+is inherently different from Saha et al. (2023) and Zhan and Datta (2023) in that these approaches
+use a generalized squared error loss function (Y −f(X))′R−1(Y −f(X)) which is not the same
+as an independent squared error loss function ( eY −f(f
+X))′( eY −f(f
+X)) because the correlation
+matrix R doesn’t commute into the function f(·) except in linear cases. Consequently, the function
+f(x(ℓ)) learned under the two loss functions will not be the same function. Generally, this is not
+an issue as interpretation of f(x(ℓ)) is not of direct interest. Further, fitting under independent
+squared error loss will be substantially faster than under the generalized squared error loss.
+For brevity in exposition, in the above description we used the exponential correlation function
+given by (2). However, the spatial decorrelation transform in (6) is not dependent upon such a
+simplistic correlation structure. In fact, any correlation structure, including anisotropic or nonsta-
+tionary, could be used in (6). The transformation is only dependent upon knowing the parameters
+of the chosen correlation function which we now address.
+In practice, Algorithm 1 requires knowing the parameters of the correlation function (ω and ϕ in
+(2)) in addition to any tuning parameters of the chosen model. These spatial correlation parameters
+can be dealt with in two ways. First, from a machine learning perspective, these parameters become
+extra tuning parameters that can be chosen via cross-validation. For most correlation functions,
+8
+these parameters have reasonable bounds (e.g. ω ∈[0, 1]) so that a grid search approach could be
+used for tuning. Likewise, Bayesian search algorithms could also be used (Wu et al., 2019; Turner
+et al., 2021).
+Or, second, these parameters could be estimated from the data using maximum
+likelihood estimation. That is, a subset of Y could be randomly sampled and used to estimate
+ω and ϕ to use in the algorithm.
+In the simulation studies and applications below, we treat
+these correlation parameters as additional tuning parameters rather than estimating them from a
+subsample. We do this because the amount of spatial correlation in the residuals depends on the
+type of mean function used (e.g. a nonlinear mean function will likely have a different correlation
+structure than a linear one because the mean function captures different features of the data).
+Hence, by tuning these spatial parameters, we optimize the spatial correlation parameters to the
+type of mean function being fit.
+3
+Simulation Studies
+3.1
+Setup
+In this section, we demonstrate the performance of our spatial adjustment in 3 simulated scenarios.
+In all scenarios, we simulate 50 datasets of size n = 50000 where spatial locations ℓi are distributed
+uniformly on the unit square for i = 1, . . . , n of which 40,000 observations were used for training
+and 10,000 used for testing. In the first scenario, the response is simulated according to a standard
+linear regression model where Y ∼Nn(Xβ, σ2I) where X is a n × 10 matrix of features where
+elements were simulated independently from a standard Gaussian distribution. We drew the true
+β parameters independently from N(0, 52) distribution and then randomly selected J of the 10
+covariates to have zero effect where J followed a binomial distribution with 10 trials (corresponding
+to each of the 10 covariates) and success probability 0.5. Thus, the complete set of features contained
+features that did not relate to the response. Finally, we set σ2 = 100 which roughly corresponds to
+an expected coefficient of determination of 0.5.
+The second simulated scenario is the similar to the first other than we let Y ∼Nn(Xβ, σ2R)
+where R is a spatial correlation matrix constructed using the correlation function in (2). Specifically,
+we set ρ(·) as the exponential correlation with ϕ = 0.236 and a nugget ω = 0.25. Setting ϕ = 0.236
+corresponds to a spatial range (i.e., the distance at which the correlation decays to 0.05) of
+√
+2/2
+which is half of the maximum spatial distance on the unit square (the spatial domain).
+Finally, in the third scenario we simulate Y ∼Nn(f(X), σ2R) where f(X) is a non-linear
+9
+function simulated from a zero-mean Gaussian process in x1 and x2. That is f ∼Nn(0, σ2
+fM)
+where M is determined by (2) with a Matern correlation function in terms of ∥xi −xj∥with
+smoothness 2.1, range 0.842 and ω = 0 (the value of ϕ was chosen so that the spatial range was
+half of the maximum distance). By simulating f in this manner, the resulting relationship between
+the response and features is non-linear.
+Each of the three simulation scenarios described above correspond to increasing complexity in
+the data. In the first scenario, the relationship between the features (X) and the response is linear
+and without spatial correlation. We use this scenario to assess how well the spatial transformation
+in (6) works when no spatial correlation is present. The second scenario only adds spatial correlation
+to the first scenario and can be used to assess the impact of accounting for spatial correlation in
+a simple relationship between the response and features. Finally, the third scenario is the most
+complex as the relationship between the response and features is non-linear and there is spatial
+correlation among the response.
+We employ linear models (LM), Bayesian additive regression trees (BART), single-layer per-
+ceptrons (SLP), boosting, random forests (RF) and K neareast neighbors (KNN) both with and
+without the spatial adjustment proposed in (6). For BART, we consider only the number of trees
+as a tuning parameter. For SLP, we tune the number of hidden neurons, penalty parameters on
+the weights and the number of epochs while we fix the activiations as ReLU with no dropout. For
+boosting, we tune the tree depth, number of trees and learning rate. For RF, we tune the number
+of variables at each split and minimum number of observations per leaf but we fix the number of
+trees at 250. Finally, for KNN, we tune the number of neighbors. Additionally, following Georganos
+et al. (2021), we also fit a geographical RF (GeoRF) using spatial features as inputs. Note that
+a non-spatial GeoRF is simply a RF. To tune the above algorithms, we use a grid search across 5
+values of each tuning parameter and with finalized tuning parameters chosen to minimize the 5-fold
+cross-validation root mean square error (RMSE).
+Ideally, we would have also compared the spatial random forests of Saha et al. (2023) as well as
+the spatial neural network of Zhan and Datta (2023). However, implementing these methods on a
+single dataset took over 24 hours for the spatial random forest and 8.6 hours for the spatial neural
+networks. Hence, not only fitting but tuning these methods was not computationally feasible.
+10
+Table 1: Comparison of predictive (out-of-sample) RMSE for spatial and non-spatial models across
+the 3 simulation scenarios. Note that the GeoRF method always includes a spatial aspect and,
+hence, does not have a corresponding non-spatial RMSE. The proposed spatial adjustment im-
+proves the RMSE for the spatial scenarios while not impacting the RMSE for the case of spatial
+independence.
+Model
+Independent Linear
+Spatial Linear
+Spatial Non-Linear
+Non-Spatial
+Spatial
+Non-Spatial
+Spatial
+Non-Spatial
+Spatial
+RF
+10.3
+10.3
+9.17
+8.65
+9.33
+6.28
+BART
+10.0
+10.0
+8.95
+8.20
+9.31
+6.26
+Boost
+10.2
+10.2
+9.12
+8.29
+9.41
+6.27
+KNN
+10.7
+10.7
+9.72
+9.65
+9.84
+6.97
+LM
+9.99
+9.99
+8.90
+5.26
+10.5
+7.39
+SLP
+10.1
+10.1
+8.99
+8.87
+9.63
+6.67
+GeoRF
+NA
+11.31
+NA
+10.15
+NA
+9.57
+3.2
+Results
+Table 1 displays the RMSE for each method both with and without the spatial adjustment on
+the simulated data in each of the scenarios. For Scenario 1 (linear, independent), all models ex-
+hibit similar performance. This equivalence is expected because of the simplicity of the simulation
+scenario. However, these results are important to consider because they indicate that the spatial
+transformation method does not hinder the prediction performance when there is no spatial corre-
+lation in the data. That is, the spatial transformation can be tuned to account for the apparent
+lack of spatial correlation in the data. In contrast, note that the RMSE under GeoRF is higher
+suggesting that adding spatial features when no spatial correlation is present can lead to a decrease
+in predictive accuracy.
+Under Scenario 2 (linear, spatial), not surprisingly, the linear model that accounts for spatial
+correlation performed best (lowest RMSE) because this was the exact data generating model. How-
+ever, note that the spatial versions of each of the algorithms outperform the non-spatial versions.
+The degree of reduction ranged from a 40% reduction in RMSE (linear) to only a 1% reduction
+in RMSE (KNN). Finally, GeoRF still came in last suggesting that adding the spatial features did
+not adequately capture the spatial correlation. These results suggest that accounting for spatial
+correlation in the model improved performance over non-spatial models. However, as we will see
+below, the modest reduction in RMSE is likely due to the simplistic linear nature of the relationship
+between the features and the response.
+In Scenario 3 (non-linear, spatial), spatial models demonstrate superior performance compared
+to their non-spatial counterparts. The improvement seen by using spatial correlation ranges from a
+11
+33% reduction (Boosting) to 29% reduction (KNN). This larger reduction in RMSE on non-linear
+data are due to appropriately accounting for the spatial nature of the data. In the non-spatial
+settings, the models likely overfit spatial structure resulting in worse out-of-sample error.
+As a final comparison, we compare the computation time associated with each model. Overall,
+the spatial adjustment for n = 50, 000 took 90 seconds on Apple M1 chip with 64 GB of memory.
+After the spatial adjustment, LM took 4 seconds, RF 49 seconds, BART 88 seconds, boosting 23
+seconds, KNN 38 seconds, SLP 12 seconds, and GeoRF 49 seconds. By comparison, as mentioned
+above, the current R and python implementations for the spatial random forests of Saha et al.
+(2023) and the spatial neural networks of Zhan and Datta (2023) took more than 24 hours and 8.6
+hours, respectively.
+4
+Application
+In this section, we demonstrate the performance of our spatial adjustments using an application
+in pollution monitoring.
+Importantly, in contrast to the simulations above, this application is
+not generated from a Gaussian process. Hence, using this application, we wish to see how the
+spatial adjustment improves ML and DL methods in this setting. Specifically, we analyze data on
+particulate matter less than 2.5 micrometers (PM2.5) in diameter taken from the environmental
+protection agencies (EPA) network of monitors. We utilize the same PM2.5 application as Zhan
+and Datta (2023). After cleaning, the data we consider consists of 593 measurements of PM2.5
+across the contiguous United States taken on June 5, 2019. We further follow Zhan and Datta
+(2023) and split the data into train and validation sets according to a block-random split strategy
+which removes whole areas of data and is closer to a real-world scenario (see the Appendix S5.1 of
+Zhan and Datta 2023 for details). This split method resulted in 72 different train-validation splits
+with a split ratio of approximately 80%-20%. The raw data along with one train-validation split is
+shown in Figure 1.
+Figure 2 displays the median root mean square error (RMSE) across all the train-validation
+splits using block-random splitting. Notably, for all models, inclusion of the spatial adjustment
+decreases RMSE suggesting that accounting for spatial correlation improves the predictive ability
+of all models when spatial correlation is present. Interestingly, there is little difference between the
+models if spatial correlation is accounted for suggesting that spatial correlation can adapt to the
+type of model being fit to improve predictive ability.
+12
+Figure 1: Raw PM2.5 data along with an example train-validation split for assessing predictive
+performance. The validation set is given by the triangle points.
+To understand further the impact of accounting for spatial correlation, Figure 3 compares the
+predictions from the BART model both using and not using the spatial adjustment (we show results
+from BART here for illustration but all other models had similar results). Clearly, using the spatial
+adjustment leads to smoother spatial predictions. Even without the spatial adjustment, BART can
+capture some of the spatial structure. However, plain BART had a higher RMSE suggesting that
+BART may overfit the training data.
+5
+Conclusions
+We present herein a spatial adjustment for using machine and deep learning methods on spatial
+data. Intuitively, the method works by performing a spatial decorrelation transform to the data
+prior to model fitting. Predictions from the fitted model are then backtransformed via the inverse
+transformation. The method is able to be tuned to adjust to the amount of spatial correlation in
+the data and is computationally scalable so that it can be applied to large spatial datasets. Via
+both simulated and real data applications, we demonstrated the added benefit of accounting for
+spatial correlation in common machine learning algorithms.
+The examples used here were all done assuming a stationary spatial correlation structure (the
+most commonly used in applications). While the decorrelation transform in (6) can presumably be
+done with any correlation function ρ(·), the application of more complex correlation structures such
+as anisotropic or non-stationary functions is an open area of research. Admittedly, more complex
+13
+Figure 2: Median RMSE for all models both with and without the adjustment for spatial correlation
+for the PM2.5 example. Note that the spatial adjustment, in all models, decreases the RMSE. The
+GeoRF model always includes spatial features and, hence, does not have a “non-spatial” equivalent.
+spatial correlation structures often involve more parameters than only a spatial range and nugget
+term. Hence, using the methods described here for these more complicated structures would require
+estimation (or tuning) of all the correlation function parameters.
+Notably, the decorrelating transform (6) is only valid for quantitative data (note that the
+theoretical foundation was laid assuming a Gaussian assumption).
+Obviously count, Bernoulli,
+multinomial or other data types can also exhibit spatial correlation. In future research, we plan to
+address the issue of non-quantitative spatial data.
+Given the breadth of ML and DL approaches, we are not able to do an exhaustive demonstration
+of the spatial adjustment in all approaches. Particularly with DL methods, we only demonstrated
+how the spatial adjustment works in conjunction with multi-layer perceptrons. As open questions,
+we need to consider how such a spatial adjustment may work with graphical or convolutional neural
+networks.
+Finally, we note that we did not explore using our approach in conjunction with uncertainty
+quantification (UQ) for machine and deep learning. Under our methods, the approach of, say,
+Zhang et al. (2019) for random forests or any of the UQ methods for deep learning surveyed in
+Gawlikowski et al. (2021) could be used to obtain eY ⋆
+lwr(u), a lower bound, and eY ⋆
+upr(u), an upper
+bound, on the decorrelated data which can then be backtransformed via (9) to Y ⋆
+lwr(u) and Y ⋆
+upr(u).
+14
+Figure 3: Comparison of predictions from BART model (a) using and (b) not using the spatial
+adjustment.
+The spatially-adjusted BART model exhibits smoother predictions than the non-
+spatial BART model.
+While this is a straightforward approach, what remains to be investigated is if such an approach
+maintains appropriate coverage under the spatial transform presented here.
+Acknowledgements
+This material is based upon work supported by the National Aeronautics and Space Administration
+under Grant/Contract/Agreement No. 10053957-01 and by the National Science Foundation under
+Grant No. 2053188.
+Data Availability Statement
+Both R and Python functions to perform the spatial decorrelation transform are available on the
+authors GitHub page at https://github.com/amillane/spatialtransform.
+15
+References
+Abdulah, S., Ltaief, H., Sun, Y., Genton, M. G., and Keyes, D. E. (2018). Exageostat: A high per-
+formance unified software for geostatistics on manycore systems. IEEE Transactions on Parallel
+and Distributed Systems, 29(12):2771–2784.
+Arbia, G., Espa, G., and Giuliani, D. (2021). Spatial microeconometrics. Routledge.
+Banerjee, S., Carlin, B. P., and Gelfand, A. E. (2014). Hierarchical modeling and analysis for spatial
+data. CRC press.
+Bradley, J. R., Cressie, N., and Shi, T. (2011). Selection of rank and basis functions in the spatial
+random effects model. In Proceedings of the 2011 Joint Statistical Meetings, pages 3393–3406.
+American Statistical Association Alexandria, VA.
+Bradley, J. R., Cressie, N., and Shi, T. (2016). A comparison of spatial predictors when datasets
+could be very large. Statistics Surveys.
+Chen, W., Li, Y., Reich, B. J., and Sun, Y. (2024). Deepkriging: Spatially dependent deep neural
+networks for spatial prediction. Statistica Sinica, 34:291–311.
+Cisneros, D., Richards, J., Dahal, A., Lombardo, L., and Huser, R. (2024). Deep graphical regression
+for jointly moderate and extreme australian wildfires. Spatial Statistics, page 100811.
+Datta, A., Banerjee, S., Finley, A. O., and Gelfand, A. E. (2016a). Hierarchical nearest-neighbor
+gaussian process models for large geostatistical datasets. Journal of the American Statistical
+Association, 111(514):800–812.
+Datta, A., Banerjee, S., Finley, A. O., and Gelfand, A. E. (2016b). On nearest-neighbor Gaus-
+sian process models for massive spatial data. Wiley Interdisciplinary Reviews: Computational
+Statistics, 8(5):162–171.
+Gawlikowski, J., Tassi, C. R. N., Ali, M., Lee, J., Humt, M., Feng, J., Kruspe, A., Triebel, R.,
+Jung, P., Roscher, R., Shahzad, M., Yang, W., Bamler, R., and Zhu, X. X. (2021). A survey of
+uncertainty in deep neural networks. arXiv preprint arXiv:2107.03342.
+Gelfand, A. E. and Schliep, E. M. (2016). Spatial statistics and gaussian processes: A beautiful
+marriage. Spatial Statistics, 18:86–104.
+16
+Georganos, S., Grippa, T., Niang Gadiaga, A., Linard, C., Lennert, M., Vanhuysse, S., Mboga,
+N., Wolff, E., and Kalogirou, S. (2021). Geographical random forests: a spatial extension of
+the random forest algorithm to address spatial heterogeneity in remote sensing and population
+modelling. Geocarto International, 36(2):121–136.
+Gray, S. D., Heaton, M. J., Bolintineanu, D. S., and Olson, A. (2022). On the use of deep neural
+networks for large-scale spatial prediction. Journal of Data Science, 20(4).
+Harris, R. and Jarvis, C. (2014). Statistics for geography and environmental science. Routledge.
+Heaton, M. J., Datta, A., Finley, A. O., Furrer, R., Guinness, J., Guhaniyogi, R., Gerber, F.,
+Gramacy, R. B., Hammerling, D., Katzfuss, M., Lindgren, F., Nychka, D. W., Sun, F., and
+Zammit-Mangion, A. (2019).
+A case study competition among methods for analyzing large
+spatial data. Journal of Agricultural, Biological and Environmental Statistics, 24:398–425.
+Huang, H., Abdulah, S., Sun, Y., Ltaief, H., Keyes, D. E., and Genton, M. G. (2021). Competition
+on spatial statistics for large datasets. Journal of Agricultural, Biological and Environmental
+Statistics, 26:580–595.
+Katzfuss, M. and Guinness, J. (2021). A general framework for vecchia approximations of gaussian
+processes. Statistical Science, 36(1).
+Lin, D.-C., Huang, H.-C., and Tzeng, S. (2023).
+Some enhancements to deepkriging.
+Stat,
+12(1):e559.
+Nikparvar, B. and Thill, J.-C. (2021).
+Machine learning of spatial data.
+ISPRS International
+Journal of Geo-Information, 10(9):600.
+Pace, R. K., Barry, R., and Sirmans, C. F. (1998). Spatial statistics and real estate. The Journal
+of Real Estate Finance and Economics, 17:5–13.
+Patelli, L., Cameletti, M., Golini, N., and Ignaccolo, R. (2023).
+A path in regression random
+forest looking for spatial dependence: a taxonomy and a systematic review.
+arXiv preprint
+arXiv:2303.04693.
+Plant, R. E. (2018). Spatial data analysis in ecology and agriculture using R. cRc Press.
+Saha, A., Basu, S., and Datta, A. (2023). Random forests for spatially dependent data. Journal of
+the American Statistical Association, 118(541):665–683.
+17
+Sainsbury-Dale, M., Richards, J., Zammit-Mangion, A., and Huser, R. (2023). Neural bayes esti-
+mators for irregular spatial data using graph neural networks. arXiv preprint arXiv:2310.02600.
+Sauer, A., Gramacy, R. B., and Higdon, D. (2023).
+Active learning for deep gaussian process
+surrogates. Technometrics, 65(1):4–18.
+Sekuli´c, A., Kilibarda, M., Heuvelink, G. B., Nikoli´c, M., and Bajat, B. (2020). Random forest
+spatial interpolation. Remote Sensing, 12(10):1687.
+Shaddick, G. and Zidek, J. V. (2015). Spatio-temporal methods in environmental epidemiology.
+CRC Press.
+Stein, A. and Gelfand, A. (2022). The impact of spatial statistics. Spatial Statistics, 50:100641.
+Stein, M. L. (2014). Limitations on low rank approximations for covariance matrices of spatial
+data. Spatial Statistics, 8:1–19.
+Tonks, A., Harris, T., Li, B., Brown, W., and Smith, R. (2024). Forecasting west nile virus with
+graph neural networks: Harnessing spatial dependence in irregularly sampled geospatial data.
+GeoHealth, 8(7):e2023GH000784.
+Turner, R., Eriksson, D., McCourt, M., Kiili, J., Laaksonen, E., Xu, Z., and Guyon, I. (2021).
+Bayesian optimization is superior to random search for machine learning hyperparameter tun-
+ing: Analysis of the black-box optimization challenge 2020. In NeurIPS 2020 Competition and
+Demonstration Track, pages 3–26. PMLR.
+Vu, Q., Zammit-Mangion, A., and Cressie, N. (2022). Modeling nonstationary and asymmetric
+multivariate spatial covariances via deformations. Statistica Sinica, 32(4):2071–2093.
+Waller, L. A. and Gotway, C. A. (2004). Applied spatial statistics for public health data. John Wiley
+& Sons.
+Wikle, C. K. and Zammit-Mangion, A. (2023). Statistical deep learning for spatial and spatiotem-
+poral data. Annual Review of Statistics and Its Application, 10:247–270.
+Wu, J., Chen, X.-Y., Zhang, H., Xiong, L.-D., Lei, H., and Deng, S.-H. (2019). Hyperparameter
+optimization for machine learning models based on bayesian optimization. Journal of Electronic
+Science and Technology, 17(1):26–40.
+18
+Yuan, Q., Shen, H., Li, T., Li, Z., Li, S., Jiang, Y., Xu, H., Tan, W., Yang, Q., Wang, J., Gao,
+J., and Zhang, L. (2020). Deep learning in environmental remote sensing: Achievements and
+challenges. Remote Sensing of Environment, 241:111716.
+Zammit-Mangion, A., Kaminski, M. D., Tran, B.-H., Filippone, M., and Cressie, N. (2024). Spatial
+bayesian neural networks. Spatial Statistics, page 100825.
+Zammit-Mangion, A., Ng, T. L. J., Vu, Q., and Filippone, M. (2022). Deep compositional spatial
+models. Journal of the American Statistical Association, 117(540):1787–1808.
+Zhan, W. and Datta, A. (2023).
+Neural networks for geospatial data.
+arXiv preprint
+arXiv:2304.09157.
+Zhang, H., Zimmerman, J., Nettleton, D., and Nordman, D. J. (2019). Random forest prediction
+intervals. The American Statistician.
+Ziakopoulos, A. and Yannis, G. (2020). A review of spatial approaches in road safety. Accident
+Analysis & Prevention, 135:105323.
+19

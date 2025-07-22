@@ -1,0 +1,713 @@
+arXiv:2010.01011v1  [cs.LG]  2 Oct 2020
+Deep Convolutional Transform Learning‹
+Jyoti Maggu1, Angshul Majumdar1, Emilie Chouzenoux2, and Giovanni
+Chierchia3
+1 Indraprastha Institute of Information Technology Delhi, India.
+jyotim, angshul@iiitd.ac.in
+2 CVN, Inria Saclay, Univ. Paris-Saclay, CentraleSup´elec, Gif-sur-Yvette, France.
+emilie.chouzenoux@centralesupelec.fr
+3 LIGM, ESIEE Paris, Univ. Gustave Eiﬀel, Noisy-le-Grand, France.
+giovanni.chierchia@esiee.fr
+Abstract. This work introduces a new unsupervised representation learn-
+ing technique called Deep Convolutional Transform Learning (DCTL).
+By stacking convolutional transforms, our approach is able to learn a
+set of independent kernels at diﬀerent layers. The features extracted in
+an unsupervised manner can then be used to perform machine learning
+tasks, such as classiﬁcation and clustering. The learning technique re-
+lies on a well-sounded alternating proximal minimization scheme with
+established convergence guarantees. Our experimental results show that
+the proposed DCTL technique outperforms its shallow version CTL, on
+several benchmark datasets.
+Keywords: Transform Learning · Deep Learning · Convolutional Neural
+Networks · Classiﬁcation · Clustering · Proximal Methods · Alternating
+Minimization
+1
+Introduction
+Deep learning and more particularly convolutional neural networks (CNN) have
+penetrated almost every perceivable area of signal/image processing and machine
+learning. Its performance in traditional machine learning tasks encountered in
+computer vision, natural language processing and speech analysis are well as-
+sessed. CNNs are also being used with success in traditional signal processing
+domains, such as biomedical signal analysis [9], radars [14], astronomy [3] and in-
+verse problems [22]. When large volumes of labeled data are available, CNNs can
+be trained eﬃciently using back-propagation methods and reach excellent perfor-
+mance [18]. However, training a CNN requires labeled data in a large quantity.
+The latter issue can be overcome by considering alternate learning paradigms,
+such as spiking neural network (SNN) [21] and the associated Hebbian learning
+[10], or alternate optimization strategies such as in [20]. However, none of those
+approaches can overcome the fundamental problem of neural networks, that is
+‹ This work was supported by the CNRS-CEFIPRA project under grant NextGenBP
+PRC2017.
+2
+J. Maggu et al.
+their limited capacity of learning in an unsupervised fashion. This explains the
+great recent interest in the machine learning community for investigating rep-
+resentation learning methods, that keep the best of both worlds, that is the
+performance of multi-layer convolutional representations and the unsupervised
+learning capacity [2,19,8,12,7].
+In this work, we propose a deep version of the convolutional transform learn-
+ing (CTL) approach introduced in [12], that we call deep convolutional transform
+learning (DCTL). A proximal alternating minimization scheme allows us to learn
+multiple layers of convolutional ﬁlters in an unsupervised fashion. Numerical ex-
+periments illustrate the ability of the method to learn representative features
+that lead to great performance on a set of classiﬁcation and clustering problems.
+The rest of the paper is organized into several sections. Section 2 intro-
+duces the transform learning paradigm and brieﬂy reminds our previous CTL
+approach. The proposed DCTL formulation and the associated learning strategy
+are presented in Section 3. The experimental results are described in Section 4.
+The conclusion of this work is drawn in Section 5.
+2
+Transform learning
+2.1
+The transform learning paradigm
+Traditional machine learning methods are limited in their ability to work with
+raw data. To perform any machine learning task, careful feature engineering
+is used, which in turn requires domain expertise. Using domain knowledge, a
+feature extractor is built to transform the raw data into a suitable internal
+representation. This internal representation is then fed to a learning subsystem,
+often a classiﬁer to detect a pattern in the input data. Learning the weights
+between input and representation layer is a challenging task since both weights
+and output are unknown. This is called representation learning.
+Transform learning, introduced in [17,16], is a representation learning para-
+digm that can be viewed as the analysis equivalent of dictionary learning. In
+dictionary learning, a basis is learned such that it synthesizes the data from the
+learned coeﬃcients. Transform learning analyzes the data by learning a basis to
+produce the coeﬃcients. Mathematically this is expressed as T X « Z, where
+T is the analysis transform, X is the data, and Z the corresponding coeﬃcient
+matrix. As proposed in [15], the matrices T and Z could be estimated by solving
+the following optimization problem
+minimize
+T,Z
+1
+2}T X ´ Z}2
+F ` λp}T }2
+F ´ log det T q ` β}Z}1.
+(1)
+The logarithmic determinant (log det) term aims at imposing a full rank on
+the learned transform, and at preventing the degenerate solution T “ 0, Z “ 0.
+The additional quadratic penalty allows to limit scale indeterminacy. Both these
+additional penalties improve the conditioning of learnt transforms. Finally, the
+ℓ1 term enforces a sparsity constraint on the coeﬃcients. It is worthy to notice
+Deep Convolutional Transform Learning
+3
+that transform learning is more general than dictionary learning in its notion
+of compressibility. The learning process is also faster because the sparse coding
+step reads here as a simple step of thresholding, while in dictionary learning, it
+requires the resolution of a non trivial optimization problem.
+2.2
+Convolutional transform learning
+We proposed in [12] the CTL approach, where a set of independent convolution
+ﬁlters are learnt to produce some data representations, in an unsupervised man-
+ner. The CTL strategy aims at generating unique and near to orthogonal ﬁlters,
+which in turn produces good features to be used for solving machine learning
+problems, as we illustrated in our experiments [12]. We present here a brief de-
+scription of this approach, as its notation and concepts will serve as a basis for
+the deep CTL formulation introduced in this paper.
+We consider a dataset
+␣
+xpmq(
+1ďmďM with M entries in RN. The CTL for-
+mulation relies on the key assumption that the representation matrix T gathers
+a set of K kernels t1, . . . , tK with K entries, namely
+T “ rt1 | . . . | tKs P RKˆK.
+(2)
+This leads to a linear transform applied to the data to produce some features
+p@m P t1, . . . , Muq
+Zm « XpmqT,
+(3)
+where Xpmq P RNˆK are Toeplitz matrices associated to pxpmqq1ďmďM such that
+XpmqT “
+“
+Xpmqt1 | . . . | XpmqtK
+‰
+“
+“
+t1 ˚ xpmq | . . . | tK ˚ xpmq‰
+,
+(4)
+and ˚ is a discrete convolution operator with suitable padding. Let us denote
+Z “
+»
+—–
+Z1
+...
+ZM
+ﬁ
+ﬃﬂP RNMˆK.
+(5)
+The goal is then to estimate pT, Zq from
+␣
+xpmq(
+1ďmďM. To do so, we proposed
+in [12] a penalized formulation of the problem, introducing suitable condition-
+ing constraints on the transforms, and sparsity constraint on the coeﬃcients.
+The learning of pT, Zq was then performed using an alternating minimization
+scheme with sounded convergence guarantees. The aim of the present paper is
+to introduce a multi-layer formulation of the CTL, in order to learn deeper rep-
+resentations, with the aim of improving the representation power of the features.
+3
+Proposed Approach
+3.1
+Deep convolutional transform model
+Starting from the CTL model, we propose to stack several layers of it to obtain a
+deep architecture. For every ℓP t1, . . . , Lu, we will seek for the transform matrix
+Tℓ“ rt1,ℓ| . . . | tK,ℓs P RKˆK,
+(6)
+4
+J. Maggu et al.
+where tk,ℓP RK is the k-th kernel on the ℓ-th layer of the representation. The
+associated coeﬃcients will be denoted as
+Zℓ“
+»
+—–
+Z1,ℓ
+...
+ZM,ℓ
+ﬁ
+ﬃﬂP RNMˆK,
+(7)
+with
+p@m P t1, . . . , Muq
+Zm,ℓ“
+“
+zpm,ℓq
+1
+| . . . | zpm,ℓq
+K
+‰
+P RNˆK.
+(8)
+The learning of pTℓq1ďℓďL and pZℓq1ďℓďL will be performed by solving
+minimize
+pTℓq1ďℓďL,pZℓq1ďℓďL
+FpT1, . . . , TL, Z1, . . . , ZLq
+(9)
+where
+FpT1, . . . , TL, Z1, . . . , ZLq “
+L
+ÿ
+ℓ“1
+˜
+1
+2
+M
+ÿ
+m“1
+||Zm,ℓ´1Tℓ´ Zm,ℓ||2
+F ` µ||Tℓ||2
+F
+´ λ log detpTℓq ` β||Zℓ||1 ` ι`pZℓq
+¸
+,
+(10)
+Here, we denote ι` the indicator function of the positive orthant, equals to 0 if
+all entries of its input have non negative elements, and `8 otherwise. Moreover,
+by a slight abuse of notation, we denote as log det the sum of logarithms of the
+singular values of a squared matrix, taking inﬁnity value as soon as one of those
+is non positive. The ﬁrst layer follows the CTL strategy, that is Zm,0 ” Xpmq.
+Moreover, for every ℓP t2, . . . , Lu, we introduced the linear operator Zm,ℓ´1 so
+as to obtain the compact notation for the multi-channel convolution product:
+Zm,ℓ´1Tℓ“ rZm,ℓ´1t1,ℓ| . . . |Zm,ℓ´1tK,ℓs
+(11)
+“
+”
+t1,ℓ˚ zpm,ℓ´1q
+1
+| . . . |tK,ℓ˚ zpm,ℓ´1q
+K
+ı
+.
+(12)
+3.2
+Minimization algorithm
+Problem (9) is non-convex. However it presents a particular multi-convex struc-
+ture, that allows us to make use of an alternating proximal minimization al-
+gorithm to solve it [1,4]. The proximity operator [5] of a proper, lower semi-
+continuous, convex function ψ : H ÞÑs´8, `8s, with pH, }¨}q a normed Hilbert
+space, is deﬁned as4
+p@ r
+X P Hq
+proxψp r
+Xq “ argmin
+XPH
+ψpXq ` 1
+2}X ´ r
+X}2.
+(13)
+The alternating proximal minimization algorithm then consists in performing
+iteratively proximity updates, on the transform matrix, and on the coeﬃcients.
+4 See also http://proximity-operator.net/
+Deep Convolutional Transform Learning
+5
+The iterates are guaranteed to ensure the monotonical decrease of the loss func-
+tion F. Convergence to a local minimizer of F can also be ensured, under mild
+technical assumptions. The algorithm reads as follows:
+For
+i “ 0, 1, . . .
+—————–
+For
+ℓ“ 1, . . . , L
+———–T ri`1s
+ℓ
+“ proxγ1F pT ri`1s
+1
+,...,T ris
+L ,Zri`1s
+1
+,...,Zris
+L q
+´
+T ris
+ℓ
+¯
+Zri`1s
+ℓ
+“ proxγ2F pT ri`1s
+1
+,...,T ris
+L ,Zri`1s
+1
+,...,Zris
+L q
+´
+Zris
+ℓ
+¯
+(14)
+with T r0s
+ℓ
+P RKˆK, Zr0s
+ℓ
+P RNMˆK, and γ1 and γ2 some positive constants.
+We provide hereafter the expression of the proximity operators involved in the
+algorithm, whose proof are provided in the appendix.
+Update of the transform matrix: Let i P N and ℓP t1, . . . , Lu. Then
+T ri`1s
+ℓ
+“ proxγ1F pT ri`1s
+1
+,...,T ris
+L ,Zri`1s
+1
+,...,Zris
+L q
+´
+T ris
+ℓ
+¯
+,
+“ argmin
+TℓPRKˆK
+1
+2γ1
+||Tℓ´ T ris
+ℓ||2
+F
+` 1
+2
+M
+ÿ
+m“1
+||Zri`1s
+m,ℓ´1Tℓ´ Zris
+m,ℓ||2
+F ` µ||Tℓ||2
+F ´ λ log detpTℓq
+“ 1
+2Λ´1V
+´
+Σ ` pΣ2 ` 2λIdq
+1{2¯
+U J,
+(15)
+with
+ΛJΛ “
+M
+ÿ
+m“1
+pZri`1s
+m,ℓ´1qJpZri`1s
+m,ℓ´1q ` pγ´1
+1
+` 2µqId.
+(16)
+Hereabove, we considered the singular value decomposition:
+UΣV J “
+˜ M
+ÿ
+m“1
+pZris
+m,ℓqJpZri`1s
+m,ℓ´1q ` γ´1
+1 T ris
+ℓ
+¸
+Λ´1.
+(17)
+Update of the coeﬃcient matrix: Let i P N. We ﬁrst consider the case when
+ℓP t1, . . . , L ´ 1u (recall that Zm,0 “ Xpmq when ℓ“ 1). Then
+Zri`1s
+ℓ
+“ proxγ2F pT ri`1s
+1
+,...,T ris
+L ,Zri`1s
+1
+,...,Zris
+L q
+´
+Zris
+ℓ
+¯
+,
+“
+argmin
+ZℓPRMNˆK
+1
+2γ2
+||Zℓ´ Zris
+ℓ||2
+F
+` 1
+2
+M
+ÿ
+m“1
+||Zri`1s
+m,ℓ´1T ri`1s
+ℓ
+´ Zm,ℓ||2
+F
+` 1
+2
+M
+ÿ
+m“1
+||Zm,ℓT ri`1s
+ℓ`1
+´ Zris
+m,ℓ`1||2
+F
+` β||Zℓ||1 ` ι`pZℓq.
+(18)
+6
+J. Maggu et al.
+Although the above minimization does not have a closed-form expression, it can
+be eﬃciently carried out with the projected Newton method. In the case when
+ℓ“ L, the second term is dropped, yielding
+Zri`1s
+L
+“ proxγ2F pT ri`1s
+1
+,...,T ri`1s
+L
+,Zri`1s
+1
+,...,Zri`1s
+L´1 ,¨q
+´
+Zris
+L
+¯
+“
+argmin
+ZLPRMNˆK
+1
+2γ2
+}ZL ´ Zris
+L }2
+F
+` 1
+2
+M
+ÿ
+m“1
+}Zri`1s
+m,L´1T ri`1s
+L
+´ Zm,L}2
+F ` β}ZL}1 ` ι`pZLq.
+(19)
+Hereagain, the projected Newton method can be employed for the minimization.
+4
+Numerical results
+4.1
+Datasets
+To assess the performance of the proposed approach, we considered the following
+image datasets5 of small-to-medium size.
+1. YALE [6]: The Yale dataset contains 165 images of 15 individuals, down-
+scaled to 32-by-32 pixels. There are 11 images per subject, one per diﬀerent
+facial expression or conﬁguration. For our experiments, we shuﬄed all the
+samples, and took 70% for training and 30% for testing. Moreover, we full-
+size YALE images of size 150-by-150 pixels.
+2. E-YALE-B [11]: The extended Yale B database contains 2432 images with
+38 subjects under 64 illumination conditions. Each image is cropped to 192-
+by-168 pixels and downscaled to 48-by-42 pixels. For our experiments, we
+shuﬄed all the samples, took 70% for training and 30% for testing.
+3. AR-Face [13]: This database contains more than 4000 images of 126 diﬀerent
+subjects (70 male and 56 female). The images have various facial expressions,
+the lighting varies, and some of the images are partially occluded by sun-
+glasses and scarves. For our experiments, we selected 2600 images of 100
+individuals (50 males and 50 females), that is 26 diﬀerent images for each
+subject. Train set contains 2000 images, and 600 images are kept in the test
+set. Each image has 540 features.
+4.2
+Numerical results
+We experiment on the YALE, EYALEB and AR faces datasets; these are well
+known benchmarking face datasets. In the ﬁrst set of experiments, we want to
+show that the accuracy of deep transform learning indeed improves when one
+goes deeper. Going deep beyond three layers makes performance degrade as the
+model tends to overﬁt for the small training set. To elucidate, we have used a
+5 http://www.cad.zju.edu.cn/home/dengcai/Data/FaceData.html
+Deep Convolutional Transform Learning
+7
+Table 1: Accuracy on SVM with layers
+Dataset
+CTL DCTL-2 DCTL-3 DCTL-4
+YALE 150 ˆ 150 94.00
+94.28
+96.00
+92.21
+YALE 32 ˆ 32
+88.00
+89.11
+90.00
+87.73
+E-YALE-B
+97.38
+97.00
+98.00
+94.44
+AR-Faces
+88.87
+92.22
+97.67
+82.21
+Table 2: Classiﬁcation Accuracy using KNN
+Dataset
+Raw Features CTL DCTL
+YALE 150 ˆ 150
+78.00
+70.00 80.00
+YALE 32 ˆ 32
+60.00
+58.85 60.00
+E-YALE-B
+71.03
+84.00 85.00
+AR-Faces
+55.00
+56.00 58.00
+Table 3: Classiﬁcation Accuracy using SVM
+Dataset
+Raw Features CTL DCTL
+YALE 150 ˆ 150
+93.00
+94.00 96.00
+YALE 32 ˆ 32
+68.00
+88.00 90.00
+E-YALE-B
+93.24
+97.38 98.00
+AR-Faces
+87.33
+88.87 97.67
+Table 4: Convolutional Transformed Clustering: ARI
+YALEB/Method Raw Features DCTL-2 DCTL-3
+K-means
+0.785
+0.734
+0.788
+Random
+0.733
+0.718
+0.738
+PCA-based
+0.734
+0.791
+0.777
+Table 5: Clustering time in sec
+YALEB/Method Raw Features DCTL-2 DCTL-3
+K-means
+2.28
+0.45
+0.14
+Random
+1.95
+0.33
+0.08
+PCA-based
+0.36
+0.09
+0.03
+8
+J. Maggu et al.
+simple support vector machine (SVM) classiﬁer. The results are shown in Ta-
+ble 1 for levels 1, 2, 3 and 4. It has already been shown in [12] that the single
+layer CTL yielded better results than other single layer representation learning
+tools, including dictionary learning and transform Learning. Therefore it is ex-
+pected that by going deeper, we will improve upon their deeper counterparts.
+We do not repeat those baseline experiments here, by lack of space. We also skip
+comparison with CNNs because of its supervised nature, whereas the proposed
+technique is unsupervised. We only show comparison of our proposed technique
+with raw features and with CTL. We take extracted features from the proposed
+DCTL and perform classiﬁcation using two classiﬁers, namely KNN and SVM.
+The classiﬁcation accuracy is reported in table 2 and table 3. Then we perform
+clustering on the extracted features of DCTL and report the comparison of Ad-
+justed Rank Index (ARI) in table 4. We also report clustering time on extracted
+features in table 5. It is worthy to remark that the time to cluster extracted
+features from the proposed methodology is comparatively less than others.
+5
+Conclusion
+This paper introduces a deep representation learning technique, named Deep
+Convolutional Transform Learning. Numerical comparisons are performed with
+the shallow convolutional transform learning formulations on image classiﬁcation
+and clustering tasks. In the future, we plan to compare with several other deep
+representation learning techniques, namely stacked autoencoder and its convo-
+lutional version, restricted Boltzmann machine and its convolutional version,
+discriminative variants of deep dictionary and transform Learning.
+6
+Appendix: Proofs of the proximity updates
+6.1
+Update of T
+Let us consider M “ 1 for simplicity, but note that all the calculations hold for
+M greater than 1. We want to minimize a function of the form:
+ΦpT q “ 1
+2||XT ´ Z||2
+F ` µ||T ||2
+F ´ λ log detpT q `
+1
+2γ1
+||T ´ T rns||2
+F .
+(20)
+Using some linear algebra, We can easily prove that:
+ΦpT q “ 1
+2||W 1{2T ´ Y ||2
+F ´ λ log detpT q ` c
+(21)
+with c a constant with respect to T ,
+W “ XJX ` p2µ ` 1
+γ1
+qId
+(22)
+and
+Y “ W ´1{2pZJX ` 1
+γ1
+T rnsq.
+(23)
+Deep Convolutional Transform Learning
+9
+Since W is invertible, one can perform the change of variable ˜T “ W 1{2T , that
+is T “ W ´1{2 ˜T. Thus,
+argminT ΦpT q “ W ´1{2 argminT ˜TΦpW ´1{2 ˜Tq,
+(24)
+with
+ΦpW ´1{2 ˜Tq “ 1
+2|| ˜T ´ Y ||2
+F ´ λ log detpW ´1{2 ˜Tq ` c.
+(25)
+Moreover,
+log detpW ´1{2 ˜T q “ log detp ˜Tq.
+(26)
+Thus,
+argmin ˜T ΦpW ´1{2 ˜Tq “ proxλ log detp ˜T qpY q,
+(27)
+which maps with the proximity operator of the logarithmic determinant function
+with weight λ. We can then apply [5, Example 24.66] and [5, Proposition 24.68]
+to conclude the proof.
+6.2
+Update of Z
+We have to solve:
+argminZ
+1
+2
+M
+ÿ
+m“1
+}XpmqT rn`1s ´ Zm}2
+F ` β||Z||1 ` ι`pZq `
+1
+2γ2
+||Z ´ Zrns||2
+F .
+(28)
+The function in (28) is fully separable, i.e. it can be written as a sum over all the
+entries of matrix Z. Due to the separability property of the proximity operator,
+it is suﬃcient to resonate on the minimization of scalar function with respect to
+Zp,q,r:
+1
+2prXmT i`1sp,q ´ Zp,q,rq2 ` β|Zp,q,r| ` ι`pZp,q,rq ` 1
+2γ2pZp,q,r ´ Zi
+p,q,rq2. (29)
+One can conclude, noticing that the term β| ¨ | ` ι` corresponds to case ’ix’ of
+in [5, Table 10.2], and by applying case ’iv’ of [5, table 10.1] to process the ﬁnal
+quadratic term.
+References
+1. Attouch, H., Bolte, J., Svaiter, B.F.: Convergence of descent methods for semi-
+algebraic and tame problems: proximal algorithms, forward-backward splitting,
+and regularized Gauss-Seidel methods. Mathematical Programming 137, 91–129
+(Feb 2011)
+2. Chabiron, O., Malgouyres, F., Tourneret, J.: Toward fast transform learning. In-
+ternational Journal on Computer Vision (114), 195–216 (2015)
+3. Chan, M.C., Stott, J.P.: Deep-cee i: ﬁshing for galaxy clusters with deep neural
+nets. Monthly Notices of the Royal Astronomical Society 490(4), 5770–5787 (2019)
+10
+J. Maggu et al.
+4. Chouzenoux, E., Pesquet, J.C., Repetti, A.: A block coordinate variable met-
+ric forward-backward algorithm. Journal on Global Optimization 66(3), 457–485
+(2016)
+5. Combettes, P.L., Pesquet, J.C.: Proximal splitting methods in signal processing.
+In: Fixed-Point Algorithms for Inverse Problems in Science and Engineering, pp.
+185–212. Springer-Verlag, New York (2010)
+6. D.J.:
+The
+yale
+face
+database.
+URL:
+http://cvc.
+yale.
+edu/projects/yalefaces/yalefaces. html 1(2), 4 (1997)
+7. El Gheche, M., Chierchia, G., Frossard, P.: Multilayer network data clustering.
+IEEE Transactions on Signal and Information Processing over Networks 6(1), 13–
+23 (Dec 2020)
+8. Fagot, D., Wendt, H., F´evotte, C., Smaragdis, P.: Majorization-minimization algo-
+rithms for convolutive NMF with the beta-divergence. In: Proceedings of the IEEE
+International Conference on Acoustics, Speech and Signal Processing (ICASSP
+2019). pp. 8202–8206 (2019)
+9. Hannun, A.Y., Rajpurkar, P., Haghpanahi, M., Tison, G.H., Bourn, C., Turakhia,
+M.P., Ng, A.Y.: Cardiologist-level arrhythmia detection and classiﬁcation in am-
+bulatory electrocardiograms using a deep neural network. Nature medicine 25(1),
+65 (2019)
+10. Kempter, R., Gerstner, W., Van Hemmen, J.L.: Hebbian learning and spiking
+neurons. Physical Review E 59(4), 4498 (1999)
+11. Lee, K., Ho, J., Kriegman, D.: Acquiring linear subspaces for face recognition under
+variable lighting. IEEE Transactions on Pattern Analysis & Machine Intelligence
+(5), 684–698 (2005)
+12. Maggu, J., Chouzenoux, E., Chierchia, G., Majumdar, A.: Convolutional transform
+learning. In: Proceedings of the International Conference on Neural Information
+Processing (ICONIP 2018). pp. 162–174. Springer (2018)
+13. Martinez, A.M.: The ar face database. CVC Technical Report24 (1998)
+14. Mason, E., Yonel, B., Yazici, B.: Deep learning for radar. In: 2017 IEEE Radar
+Conference (RadarConf). pp. 1703–1708. IEEE (2017)
+15. Ravishankar, S., Bresler, Y.: Learning sparsifying transforms. IEEE Trans. Signal
+Process. 61(5), 1072–1086 (2013)
+16. Ravishankar, S., Bresler, Y.: Online sparsifying transform learning - Part II. IEEE
+J. Sel. Topics Signal Process. 9(4), 637–646 (2015)
+17. Ravishankar, S., Wen, B., Bresler, Y.: Online sparsifying transform learning - Part
+I. IEEE J. Sel. Topics Signal Process. 9(4), 625–636 (2015)
+18. Rumelhart, D.E., Hinton, G.E., Williams, R.J.: Learning representations by back-
+propagating errors. nature 323(6088), 533–536 (1986)
+19. Tang, W., Chouzenoux, E., Pesquet, J., Krim, H.: Deep transform and metric
+learning network: Wedding deep dictionary learning and neural networks. Tech.
+rep. (2020), https://arxiv.org/pdf/2002.07898.pdf
+20. Taylor, G., Burmeister, R., Xu, Z., Singh, B., Patel, A., Goldstein, T.: Training
+neural networks without gradients: A scalable admm approach. In: International
+conference on machine learning. pp. 2722–2731 (2016)
+21. Van Gerven, M., Bohte, S.: Artiﬁcial neural networks as models of neural informa-
+tion processing. Frontiers in Computational Neuroscience 11, 114 (2017)
+22. Ye, J.C., Han, Y., Cha, E.: Deep convolutional framelets: A general deep learning
+framework for inverse problems. SIAM Journal on Imaging Sciences 11(2), 991–
+1048 (2018)

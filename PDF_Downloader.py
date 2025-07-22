@@ -7,7 +7,7 @@ import os
 query = "deep learning transformers"
 results = arxiv.Search(
     query=query,
-    max_results=2,
+    max_results=15,
     sort_by=arxiv.SortCriterion.Relevance
 )
 

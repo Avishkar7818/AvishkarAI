@@ -1,0 +1,489 @@
+Deep Learning Models for Automatic
+Summarization
+The Next Big Thing in NLP?
+Pirmin Lemberger
+p.lemberger@groupeonepoint.com
+onepoint
+29 rue des Sablons, 75116 Paris
+groupeonepoint.com
+May 26, 2020
+Abstract
+Text summarization is an NLP task which aims to convert a textual
+document into a shorter one while keeping as much meaning as possible.
+This pedagogical article reviews a number of recent Deep Learning archi-
+tectures that have helped to advance research in this ﬁeld. We will discuss
+in particular applications of pointer networks, hierarchical Transformers
+and Reinforcement Learning. We assume basic knowledge of Seq2Seq ar-
+chitecture and Transformer networks within NLP.
+1
+Perhaps the most helpful NLP task of all
+For over a quarter of century we have been able to search the web by querying
+a search engine using a couple of relevant keywords. Without such a tool the
+internet would be nothing but useless garbage dump of data. In 1998 Google’s
+PageRank algorithm redeﬁned what we can expect as far as relevance of search
+results is concerned. More recently some semantic processing has been added
+to the wizardry that helps the engine to interpret a query that was expressed in
+plain language. In a not too distant future we may perhaps pinpoint documents
+by engaging a short Q&A kind of conversation with a search engine, just as
+we would with a bookseller. There is an important diﬀerence though between
+a bookseller and a search engine. If you are hesitant about which book you
+should read you could try to ask the bookseller to summarize it for you in few
+of sentences.
+This kind summarization task has long seemed totally out of reach within
+the classic rule-based NLP approaches and neither was it not considered realistic
+in foreseeable future. But, slowly, things are now changing with recent progress
+1
+arXiv:2005.11988v1  [cs.CL]  25 May 2020
+in Deep Learning models for NLP. For the moment just imagine you had a drop
+down list next to the input ﬁeld of your favorite search engine that would allow
+you to set the length of an automatic summary for a given document. Say,
+a 1 sentence, a 10 sentences or a one page summary. Would that be helpful?
+Actually it is quite possible that it could quickly prove so useful that it could
+become ubiquitous. Besides improving document search it could also help in
+a multitude of other tasks. For instance it could help scientists keep up with
+a dizzying ﬂow of publications in ﬁelds like medicine or AI. More prosaically
+it could help producing short product descriptions for online stores with cata-
+logues too large to be handled manually. Many more examples of applications
+of automatic summarization are described for instance here.
+For larger documents with several hundreds of pages like novels such generic
+summarization tools still belong to the realm of science ﬁction. However, thanks
+to the ever surprising ﬂexibility of Deep Learning models, the wait may not be
+that long for tools that could summarize one- or two-page documents in a few
+sentences, at least within speciﬁc areas of knowledge. The aim of this article is
+to describe recent data sets [1, 2] and Deep Learning architectures [3, 4, 5] that
+have brought us a little closer to the goal.
+2
+A diﬃcult task
+The summarizing task is diﬃcult for a number of reasons, some of which are
+common to other NLP tasks like translation for instance:
+• For a given document there is no summary which is objectively the
+best. As a general rule, many of them that would be judged equally good
+by a human.
+• It is hard to deﬁne precisely what a good summary is and what score
+we should use for its evaluation.
+• Good training data has long been scarce and expensive to collect.
+Human evaluation of a summary is subjective and involves judgments like style,
+coherence, completeness and readability. Unfortunately no score is currently
+known which is both easy to compute and faithful to human judgment. The
+ROUGE score [6] is the best we have but it has obvious shortcomings as we shall
+see. ROUGE simply counts the number of words, or n-grams, that are common
+to the summary produced by a machine and a reference summary written by a
+human. More precisely it reports a combination of the corresponding recall:
+recall :=
+#overlapping n–grams
+#words in the reference summary,
+and precision:
+precision :=
+#overlapping n–grams
+#words in the machine summary.
+The combination reported in ROUGE-n is their geometric mean (known as
+the F1 score). Although the ROUGE score does not faithfully reﬂect a human
+2
+judgment it has the advantage of computational simplicity and it takes into ac-
+count some of the ﬂexibility associated with the multiple summaries that could
+result by rearranging words within a valid summary.
+There are two types of summarization systems:
+• Extractive summarization systems select a number of segments from
+the source document to make up a summary. The advantage of this ap-
+proach is that the resulting summary is guaranteed to be grammatically
+correct. In general extractive systems achiever high ROUGE scores and
+are more reliable than the option we discuss next.
+• Abstractive summarization systems on the other hand generate their
+own words and sentences to reformulate the meaning of the source as a
+human writer would do. They can be viewed as compression systems that
+attempt to preserve meaning.
+This latter kind of systems is obviously
+more diﬃcult to develop because it involves the ability to paraphrase in-
+formation and to include external knowledge.
+We will describe instances of both kinds below.
+3
+More and better Data
+Until recently the main data set used for training summarization models was
+the CNN / Daily Mail data set which contains 300,000 examples of news ar-
+ticle paired with their multiline summary. A detailed examination [1], however,
+has revealed various limitations in this data set that could bias the evaluation
+of the ability of a system to perform text summarization. It turned out for
+instance that useful information is spread unevenly across the source, namely
+mostly at the beginning of the documents. Moreover, many summaries contain
+large fragments of the source. This is certainly not the best way for teaching a
+system how to produce good abstractive summaries.
+But things have changed recently. The BigPatent dataset [1] for instance
+contains 1.3 millions patent documents together with their summaries that al-
+leviate most of the above shortcomings.
+A novel approach to produce ever growing data sets for training summa-
+rization models uses video transcripts of talks given at international scientiﬁc
+conferences. The basic assumption here is that these transcripts make a good
+starting point for producing high quality summaries of scientiﬁc papers. The
+transcript itself is not directly the summary of a paper. Rather, the authors
+of the TalkSumm method [2] propose to create a summary by retrieving a
+sequence of relevant sentences from the paper presented in the talk. A sentence
+is deemed relevant depending on how many words the speaker uses to describe
+it in her talk, assuming that she has a given sentence of the paper in mind at
+any given point in time.
+3
+4
+Clever architectures, improved cost functions
+In this section we describe 3 neural network models that have be developed re-
+cently for the summarization task. The aim here is not completeness of course
+but merely to illustrate the diversity of ideas which have been proposed to tackle
+this fundamental NLP problem.
+The basic neural network architectures that make it possible to learn this
+kind of task are the Seq2Seq architectures, the LSTM recurrent neural
+networks (RNN), the BERT and the Transformer models as well as the at-
+tention mechanism.
+Figure 1: Basic Seq2Seq encoder-decoder architecture with attention. The xi are
+the input token embeddings, the coeﬃci at
+i are the attention weights at step t,
+the hi are the context vectors, ht is the sentence embedding at step t obtained
+by weighting the context vectors with the attention weights, si are the decoder
+states, x′
+i are the embeddings of the generated token (at inference time) or
+ground truth tokens (at training time when using teacher forcing).
+At last
+pt
+vocab is the probability distribution at time t over a ﬁxed vocabulary.
+For the readers unfamiliar with any of these topics we recommend the above
+links which will provide excellent introductions to each of them. Figure 1 repre-
+sents the Seq2Seq architecture which converts a sequence of tokens into another
+sequence with a possibly diﬀerent length. It deﬁnes the vectors we will refer to
+when talking about Seq2Seq.
+Figure 2 sketches a Transformer network with the self-attention dependen-
+cies between embeddings an hidden vectors. Roughly speaking a transformer
+converts a sequence of token embeddings xi into another sequence of context
+aware embeddings hi. The input vectors xi also typically include positional
+4
+Figure 2: BERT as the encoder part of the Transformer architecture. The core idea
+behind the Transformer is a smart implementation of attention mechanism that allows
+computations to be parallelized eﬃciently on GPU’s, something that was not possible
+with classical RNN. Each input vector xj is a sum of a token embedding and a position
+embedding. The outputs hi are context aware token embeddings.
+information. This is needed in contrast to RNN networks because of the per-
+mutation symmetry of inputs in a Transformer.
+4.1
+Summarizing without stuttering
+The ﬁrst architecture we present addresses the abstractive summarization task
+[3]. Early attempts to apply vanilla Seq2Seq architectures to the summarization
+revealed a number of issues with this straightforward approach:
+• Factual details in the source document, like dates, locations or phone
+numbers, were often reproduced incorrectly in the summary.
+• A ﬁnite vocabulary prevents some words like proper names from being
+taken into accounts.
+• Unnecessary repetitions of source fragments often occur, in other words
+the model tends to stutter.
+Figure 3 shows examples of these unwanted behaviors. The authors in [3] pro-
+pose two improvements over the vanilla Seq2Seq with attention mechanism to
+mitigate these shortcomings.
+First, to overcome the ﬁnite vocabulary limitation they allow the network to
+copy a word directly from the source and use it in the summary when needed.
+The precise mechanism to do this is called a pointer network. Remember that
+5
+Figure 3: The last section “Pointer-Gen + Coverage” contains the output of the
+system proposed in [3]. The fragments used in the summary are shown in blue, factual
+errors in red and unnecessary repetitions in green.
+in a vanilla Seq2Seq network the decoder computes a probability distribution
+pt
+vocab(w), at each time step t, over the words w in a ﬁxed ﬁnite vocabulary. As
+usual pt
+vocab is computed with a softmax layer that takes the attention context
+vector ht and the decoder state st as inputs. In a pointer network an additional
+copy probability pcopy is computed which represents the probability that a
+word should be copied from the source rather than generated by the decoder.
+The probability pcopy is computed using a sigmoid layer having ht, st and xt
+vectors as inputs (see ﬁgure 1). Which word should actually be copied is deter-
+mined by the attention weights at
+i that the decoder puts at time t to each word
+wi in the source. Putting it all together, the full probability for the model to
+produce the word w is thus given by the following mixture:
+pt(w) := (1 −pcopy) pt
+vocab(w) + pcopy
+X
+i:wi=w
+at
+i.
+Second, to avoid repeating the same segments the authors deﬁne a coverage
+vector ct at each time step t which estimates the amount of attention that each
+6
+word wi in the source has received from the decoder until time t:
+ct
+i :=
+t−1
+X
+s=0
+as
+i.
+This coverage vector is then used in two diﬀerent places within the network.
+First it is used to inform the attention mechanism in charge of computing the
+attention weights at
+i (in addition to the usual dependence on the encoder context
+vector hi for the word wi and the decoder state st). The decoder is thus aware
+of the words it has already been paying attention to. Second it is used to correct
+the loss function. Remember that at time step t the weight at
+i is the attention
+put on word wi while ct
+i is the attention this same word has received in the past.
+If the word wi receives more attention at time t than it has already received in
+the past, that is if at
+i > ct
+i, then the cost function should penalize large values of
+ct
+i and also the other way around. To penalize attention to repeated words one
+deﬁnes an additional term in the loss function at time step t as a sum over
+input tokens:
+Lt
+coverage :=
+X
+i
+min
+ at
+i, ct
+i
+
+.
+This is then added (with an additional hyperparameter λ) to the usual negative
+log likelihood Lt
+ML := −log pt(w∗
+t ) of the target word w∗
+t in the train set:
+Lt := Lt
+ML + λLt
+coverage.
+Results with and without these additional tricks are shown in ﬁgure 3.
+4.2
+Documents as sequences of contextualized sentences
+Our next example illustrates recent ideas that deﬁned a new SOTA for the
+extractive summary task. It builds directly upon a key idea that lead to the
+BERT model in 2018, namely that of transfer learning based on a clever pre-
+training task for a Transformer encoder. Let’s go into a little more detail and
+summarize the HIBERT architecture for document summarization [4] .
+The basic observation is that extractive classiﬁcation can be cast as a sen-
+tence tagging problem: simply train a model to identify which sentence in
+a document should be kept to make up summary! For this purpose the HIB-
+ERT architecture uses two nested encoder Transformers as illustrated in ﬁgure 4.
+The ﬁrst Transformer encoder at the bottom is a classic sentence encoder
+that transforms the sequence of words (wk
+0, wk
+1, . . . , wk
+jk) that make up the kth
+sentence of the document to be summarized into a sentence embedding hk. This
+vector is conventionally identiﬁed as the context vector above the end of sen-
+tence token ⟨EOS⟩.
+The second Transformer encoder which sits on the top is a document en-
+coder that transforms the sequence of sentence embeddings (h1, h2, . . . , hD)
+into a sequence of document aware sentence embeddings (d1, d2, . . . , dD).
+These embeddings are in turn converted into a sequence of probabilities (p1, p2, . . . , pD)
+7
+Figure 4: The HIBERT architecture involves a hierarchy of two Transformer encoders
+used to classify each sentence within a document as being part of the summary or not.
+where pj is the probability that the jth sentence should be part of the summary.
+Training such a complex hierarchical network from scratch is impractical
+because it would require an unrealistic amount of document-summary pairs. As
+is well known, the best strategy to train such a complex network with a limited
+amount of data is to use transfer learning. For this purpose the HIBERT
+architecture is ﬁrst pretrained on an auxiliary task which consists in predicting
+sentences that are randomly masked (15% of them) within in a large corpus of
+documents:
+Turing was an English mathematician. He was highly inﬂuential.
+Turing is widely considered to be the father of artiﬁcial intelligence.
+Turing was an English mathematician. [MASK] [MASK] [MASK]
+[MASK]. Turing is widely considered to be the father of artiﬁcial
+intelligence.
+Figure 5 shows the architecture used for this masked sentence prediction
+task. It adds a Transformer decoder on top of the HIBERT architecture in
+order to convert the document aware sentence embedding dk into the sequence
+of words (wk
+0, wk
+1, . . . , wk
+j−1) of the kth sentence which was masked. To generate
+8
+the word at step i the decoder uses both its context vector ˜hi and the document
+aware sentence embedding dk from the document encoder.
+Figure 5: The architecture used for the masked sentence prediction task.
+A sen-
+tence Transformer decoder is added on top of the HIBERT architecture to recover the
+words of a masked sentence using the information encapsulated in its document aware
+embedding dk.
+Trained this way the network gathers a large amount of semantic knowledge
+without requiring any expansive labeling procedure. In a second stage, lever-
+aging what it learned during the pretraining task, the network is ﬁne-tuned on
+the actual target task, namely summarization as a sentence binary tagging task
+as in ﬁgure 4 describes.
+This masked sentence prediction task is obviously reminiscent, on a sentence
+level, of the masked language model (MLM) used for pretraining the original
+BERT model. Remember that the MLM task consisted in recovering randomly
+masked words within sentences.
+4.3
+Reinforcement Learning comes to the rescue
+As we explained earlier one central issue with the summarization task is the
+lack of a unique best summary. The ROUGE score takes this into account, up
+to some level, because it ignores the order of the words (or n-grams) within
+the generated summary. Therefore the cost function we would actually like to
+minimize should be something like this ROUGE score, or at least the ﬁnal loss
+function should include such a term. This is the strategy that was followed in
+9
+the last work [5] we present here which, again, concerns abstractive summariza-
+tion.
+The problem with a score like ROUGE is that for any sequence of words
+(w1, . . . , wj) generated by the decoder, it is constant with respect to the param-
+eters θ of the network, thus making backpropagation impossible. The situation is
+not hopeless though because the expectation of the ROUGE score for sentences
+(w1, . . . , wj), sampled from the joint probability distribution pθ(w1, . . . , wj) de-
+ﬁned by the generator is indeed a diﬀerentiable function of those parameters
+θ! The way to go is clear then. Just minimize the loss LRL(θ) deﬁned by that
+expectation:
+LRL(θ) := −E(w1,...,wj)∼pθ [ROUGE (w1, ..., wj)]
+Actually we can view the generator of a Seq2Seq model as a Reinforcement
+Learning (RL) agent whose action at time step t is to generates a word wt
+depending on an inner state st which encapsulates the history from previous
+actions. From here on we just need to open a book on RL [13] to learn how
+to minimize LRL(θ). A basic result in RL, known as the Policy Gradient
+Theorem, states that the gradient of LRL(θ):
+∇θLRL := −E(w1,...,wj)∼pθ [ROUGE (w1, ..., wj) ∇θ log pθ (w1, ..., wj)]
+where
+log pθ (w1, ..., wj) :=
+j
+X
+t=1
+log pθ (wt|w1, ..., wt−1)
+and the last index j is that of the ⟨EOS⟩token. The REINFORCE algorithm
+approximates the above expectation with a single sample (w1, . . . , wj) from the
+distribution pθ(w1, . . . , wj) computed by the generator:
+∇θLRL ≈−
+"
+ROUGE(w1, ..., wj)∇θ
+j
+X
+t=1
+log pθ(wt|w1, ..., wt−1)
+#
+In practice scores like ROUGE can have a large variance which hinders con-
+vergence of the gradient descent.
+Fortunately, we can enhance the speed of
+convergence by comparing ROUGE(w1, . . . , wj) to a baseline b which is in-
+dependent of (w1, . . . , wj). This does not change the gradient of LRL as can
+readily be veriﬁed but it can considerably reduce the variance [13] and thus
+dramatically improve convergence:
+∇θLRL ≈−
+"
+[ROUGE(w1, ..., wj) −b] ∇θ
+j
+X
+t=1
+log pθ(wt|w1, ..., wt−1)
+#
+The main point thus is to ﬁnd an appropriate baseline. The idea in the work
+we are discussing [5] is to take the baseline b equal to the ROUGE score of
+the sequence of words ( ˆw1, ..., ˆwj) the generator actually generates at inference
+time. Remember that this is the sequence of words that successively maximize
+the conditional probabilities as computed by the softmax of the decoder at each
+step t:
+ˆwt := arg max
+wt
+pθ(wt| ˆw1, ..., ˆwt−1).
+10
+This choice for the baseline b is called self-critical sequence training (SCST).
+Altogether the reinforcement loss term thus reads:
+LRL ≈
+"
+[ROUGE( ˆw1, ..., ˆwj) −ROUGE(w1, ..., wj)]
+j
+X
+t=1
+log pθ(wt|w1, ..., wt−1)
+#
+.
+where
+wt is sampled successively from pθ(wt|w1, ..., wt−1) for t = 1, ..., j,
+ˆwt successively maximizes pθ(wt| ˆw1, ..., ˆwt−1) for t = 1, ..., j.
+This loss term as we can see prompts pθ to generate word sequences (w1, ..., wj)
+whose ROUGE score is larger than that of the sequence ( ˆw1, ..., ˆwj) that was
+currently generated by the decoder.
+There are two beneﬁts for including such a SCST reinforcement learning term
+LRL in the loss function. The ﬁrst, which motivated the construction LRL of in
+the ﬁrst place, is that it makes it possible to use a non-diﬀerentiable score like
+ROUGE within a stochastic gradient descent training procedure. The second
+beneﬁt is that it also cures the so called exposure bias. Exposure bias results
+from the classic teacher forcing procedure that is typically used to train a
+Seq2Seq model. This procedure trains the decoder RNN using the ground truth
+words (w∗
+1, ..., w∗
+j ) from the train set while at inference time the decoder must
+of course use its own generated tokens ( ˆw1, ..., ˆwj), which could therefore result
+in an accumulation of errors. The SCST choice for the baseline b amounts to
+train the decoder using the distribution it will actually see at inference time.
+The ﬁnal loss function used is a weighted sum of the reinforcement learn-
+ing loss LRL and a standard maximum likelihood objective LML.
+The
+former takes into account the non-uniqueness of summaries, at least up to some
+point, but by itself it is certainly not an incentive for the model to produce
+readable messages. The latter on the other hand favors readable sentences as it
+is basically deﬁnes a language model.
+In order to avoid repetitions, the authors also use an enhanced attention
+mechanism that involves a pointer network similar to the one we described in
+the ﬁrst example [3].
+5
+What’s next?
+The three models we described in the previous section all use Deep Learning
+and therefore implement a purely statistical approach to the summarization
+task. Recent research also tries to ﬁnd better loss functions. Researchers at
+ReciTAL for instance explore the interesting idea that a good summary should
+answer questions as well as the original text allows [14]. On the whole, these
+models work indeed surprisingly well for short documents.
+But can we rea-
+sonably expect to build a system that could summarize a 300 pages novel in
+a page using techniques that only rely on crunching huge amounts of textual
+data? This is far from obvious. Abstract summarization should in principle be
+able to leverage real world knowledge to make sense of a document or a book
+11
+to be summarized. It is unlikely though that language models alone, even when
+initialized with clever pretraining tasks, can ever capture such common sense
+which is more likely collected by sensory experience. One short term possibil-
+ity for building useful summarization tools could be to narrow their scope down
+to speciﬁc areas of expertise where knowledge basis or ontologies are already
+available. A more radical step towards building system with better “real world
+understanding” could arise from multimodal learners designed to aggregate
+audio, video and text modalities, from movies from instance. Promising results
+have already been obtained along this path [15].
+Acknowledgments
+I would like here to thank Thomas Scialom, researcher at ReciTAL, who kindly
+share his knowledge with me by pointing my attention to his Summarizing
+Summarization page [16]. This helped me kick start my exploration of Deep
+Learning summarization models.
+References
+[1] BIGPATENT: A Large-Scale Dataset for Abstractive and Coherent Sum-
+marization, Eva Sharma, Chen Li, Lu Wang, arXiv:1906.03741.
+[2] TalkSumm:
+A Dataset and Scalable Annotation Method for Scien-
+tiﬁc Paper Summarization Based on Conference Talks, Guy Lev, Michal
+Shmueli-Scheuer,
+Jonathan Herzig,
+Achiya Jerbi,
+David Konopnicki,
+arXiv:1906.01351.
+[3] Get To The Point: Summarization with Pointer-Generator Networks, Abigail
+See, Peter J. Liu, Christopher D. Manning, arXiv:1704.04368.
+[4] Document Level Pre-training of Hierarchical Bidirectional Transformers
+for Document Summarization, Xingxing Zhang, Furu Wei, Ming Zhou,
+arXiv:1905.06566.
+[5] A Deep Reinforced Model for Abstractive Summarization, Romain Paulus,
+Caiming Xiong, Richard Socher, arXiv:1705.04304 .
+[6] ROUGE – A Package for Automatic Evaluation of Summaries, Chin-Yew
+Lin.
+[7] Self-critical Sequence Training for Image Captioning, Steven J. Ren-
+nie, Etienne Marcheret, Youssef Mroueh, Jarret Ross, Vaibhava Goel,
+arXiv:1612.00563.
+[8] Seq2Seq with Attention and Beam Search, Guillaume Genthial blog.
+[9] Understanding LSTM Networks, Christopher Olah, Colah’s blog.
+[10] The Illustrated BERT, ELMo and Co. , Jay Alammar blog.
+[11] The Illustrated Transformer, Jay Alammar blog.
+12
+[12] Neural Machine Translation by Jointly Learning to Align and Translate,
+Dzmitry Bahdanau, Kyunghyun Cho, Yoshua Bengio, arXiv:1409.0473.
+[13] Reinforcement Learning: An Introduction, Richard S. Sutton and Andrew
+G. Barto, MIT Press, Cambridge, MA, 2018.
+[14] Answers Unite! Unsupervised Metrics for Reinforced Summarization Mod-
+els, Thomas Scialom, Sylvain Lamprier, Benjamin Piwowarski, Jacopo Sta-
+iano, arXiv:1909.01610.
+[15] Multimodal Abstractive Summarization for How2 Videos, Shruti Palaskar,
+Jindˇrich Libovick´y, Spandana Gella, Florian Metze, arXiv:1906.07901.
+[16] Summarizing Summarization on GitHub, Thomas Scialom, ReciTAL.
+13
